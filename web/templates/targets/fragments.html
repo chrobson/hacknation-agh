@@ -1,0 +1,111 @@
+{{define "targets/nav"}}
+<a href="/" >Pulpit</a>
+<a href="/targets" aria-current="page">Cele</a>
+<a href="/scans">Skany</a>
+<a href="/results">Wyniki</a>
+{{end}}
+
+{{define "targets/page"}}
+<section id="targets-page" class="targets">
+  <h1>Cele skanowania</h1>
+  <p class="summary">
+    Celów: <strong>{{len .Targets}}</strong>
+    (IP: {{.Counts.IP}}, CIDR: {{.Counts.CIDR}}, domeny: {{.Counts.Domain}}),
+    adresów w zakresach: <strong>{{.Counts.Addresses}}</strong>.
+    Dozwolone sieci: {{range $i, $p := .Allowed}}{{if $i}}, {{end}}<code>{{$p}}</code>{{else}}<em>brak, import zablokowany</em>{{end}}.
+  </p>
+
+  {{if .Error}}<p class="alert alert-error" role="alert">{{.Error}}</p>{{end}}
+  {{with .Report}}{{template "targets/report" .}}{{end}}
+
+  {{if .CanWrite}}
+  <div class="grid two">
+    <form method="post" action="/targets" hx-post="/targets" hx-target="#targets-page" hx-swap="outerHTML" class="card">
+      <h2>Dodaj ręcznie</h2>
+      <label for="t-values">Adresy IP, zakresy CIDR lub domeny (jeden w wierszu, opcjonalnie tagi po spacji, np. <code>10.20.0.0/24 lab;web</code>)</label>
+      <textarea id="t-values" name="values" rows="6" required placeholder="10.20.0.0/24&#10;10.20.1.10&#10;app.lab.local"></textarea>
+      <label for="t-tags">Tagi dla wszystkich (rozdzielone średnikiem)</label>
+      <input id="t-tags" name="tags" type="text" placeholder="lab;web">
+      <button type="submit">Dodaj cele</button>
+    </form>
+
+    <form method="post" action="/targets/upload" enctype="multipart/form-data"
+          hx-post="/targets/upload" hx-encoding="multipart/form-data" hx-target="#targets-page" hx-swap="outerHTML" class="card">
+      <h2>Import z pliku</h2>
+      <label for="t-file">Plik CSV (<code>value,tags</code>, tagi rozdzielone <code>;</code>) lub JSON (<code>[{"value": "...", "tags": []}]</code>)</label>
+      <input id="t-file" name="file" type="file" accept=".csv,.json,.txt,text/csv,application/json,text/plain" required>
+      <label for="t-ftags">Dodatkowe tagi (rozdzielone średnikiem)</label>
+      <input id="t-ftags" name="tags" type="text" placeholder="import">
+      <button type="submit">Importuj plik</button>
+    </form>
+  </div>
+  {{end}}
+
+  <div class="toolbar">
+    <form method="get" action="/targets" hx-get="/targets" hx-target="#targets-page" hx-swap="outerHTML" hx-push-url="true">
+      <label for="t-filter">Filtruj po tagu</label>
+      <select id="t-filter" name="tag" onchange="this.form.requestSubmit()">
+        <option value="">wszystkie</option>
+        {{range .AllTags}}<option value="{{.}}"{{if eq . $.Filter}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+      <noscript><button type="submit">Filtruj</button></noscript>
+    </form>
+    <span class="export">Eksport:
+      <a href="/targets/export?format=csv{{if .Filter}}&amp;tag={{.Filter}}{{end}}" download>CSV</a>
+      <a href="/targets/export?format=json{{if .Filter}}&amp;tag={{.Filter}}{{end}}" download>JSON</a>
+    </span>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr><th>Wartość</th><th>Typ</th><th>Adresów</th><th>Tagi</th>{{if .CanWrite}}<th>Akcje</th>{{end}}</tr>
+    </thead>
+    <tbody>
+      {{range .Targets}}{{template "targets/row" (row . $.CanWrite)}}{{else}}
+      <tr><td colspan="5"><em>Brak celów{{if $.Filter}} z tagiem „{{$.Filter}}”{{end}}.</em></td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{define "targets/row"}}
+<tr id="target-{{.T.ID}}">
+  <td><code>{{.T.Value}}</code></td>
+  <td>{{kindLabel .T.Kind}}</td>
+  <td>{{addrs .T}}</td>
+  <td>
+    {{if .CanWrite}}
+    <form method="post" action="/targets/{{.T.ID}}/tags" hx-post="/targets/{{.T.ID}}/tags" hx-target="#target-{{.T.ID}}" hx-swap="outerHTML" class="inline">
+      <input name="tags" type="text" value="{{join .T.Tags ";"}}" aria-label="Tagi celu {{.T.Value}}" size="20">
+      <button type="submit">Zapisz</button>
+    </form>
+    {{else}}
+    {{range .T.Tags}}<span class="tag">{{.}}</span> {{end}}
+    {{end}}
+  </td>
+  {{if .CanWrite}}
+  <td>
+    <form method="post" action="/targets/{{.T.ID}}/delete" hx-post="/targets/{{.T.ID}}/delete" hx-target="#target-{{.T.ID}}" hx-swap="outerHTML"
+          hx-confirm="Usunąć cel {{.T.Value}}?" class="inline">
+      <button type="submit" class="danger">Usuń</button>
+    </form>
+  </td>
+  {{end}}
+</tr>
+{{end}}
+
+{{define "targets/report"}}
+<div class="card report" role="status">
+  <h2>Raport importu</h2>
+  <p>Zaimportowano: <strong>{{.Imported}}</strong>, duplikaty: <strong>{{.Duplicates}}</strong>, błędy: <strong>{{len .Errors}}</strong>.</p>
+  {{if .Errors}}
+  <table class="table">
+    <thead><tr><th>Wiersz</th><th>Wartość</th><th>Błąd</th></tr></thead>
+    <tbody>
+      {{range .Errors}}<tr><td>{{.Line}}</td><td><code>{{.Value}}</code></td><td>{{errLabel .Error}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}
