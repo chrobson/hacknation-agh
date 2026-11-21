@@ -116,6 +116,25 @@ func (n *Nmap) Services(ctx context.Context, hosts []netip.Addr, o Opts) ([]mode
 				}
 			}
 		}
+		if o.DeepUnknown {
+			if ports := unknownPorts(out, group); len(ports) > 0 && len(ports) <= MaxDeepPorts {
+				res, err := n.run(ctx, DeepServiceArgs(group, ports, o))
+				if err != nil {
+					return nil, err
+				}
+				named := map[model.AssetKey]model.ServiceObs{}
+				for _, s := range res.Services {
+					if want[s.Key.IP] && !unnamed(s) {
+						named[s.Key] = s
+					}
+				}
+				for i, s := range out {
+					if d, ok := named[s.Key]; ok && unnamed(s) {
+						out[i] = d
+					}
+				}
+			}
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return keyLess(out[i].Key, out[j].Key) })
 	return out, nil
@@ -197,6 +216,52 @@ func ExtraServiceArgs(hosts []netip.Addr, o Opts) []string {
 		scanType = "-sS"
 	}
 	args := []string{scanType, "-Pn", "-n", "-p", portList(o.ExtraPorts), "-sV", "--version-light", "--open"}
+	args = appendRate(args, o.MaxRate)
+	if len(hosts) > 0 && hosts[0].Unmap().Is6() {
+		args = append(args, "-6")
+	}
+	args = append(args, "-oX", "-")
+	for _, h := range hosts {
+		args = append(args, h.Unmap().String())
+	}
+	return args
+}
+
+// unnamed reports a service the version scan could not name.
+func unnamed(s model.ServiceObs) bool {
+	b := strings.TrimSuffix(s.Banner, "?")
+	return s.Product == "" && (b == "" || b == "unknown" || b == "tcpwrapped")
+}
+
+// unknownPorts returns the sorted ports of unnamed services on the hosts of
+// group.
+func unknownPorts(svcs []model.ServiceObs, group []netip.Addr) []int {
+	in := make(map[netip.Addr]bool, len(group))
+	for _, h := range group {
+		in[h.Unmap()] = true
+	}
+	set := map[int]bool{}
+	for _, s := range svcs {
+		if in[s.Key.IP.Unmap()] && s.Key.Proto == "tcp" && unnamed(s) {
+			set[int(s.Key.Port)] = true
+		}
+	}
+	ports := make([]int, 0, len(set))
+	for p := range set {
+		ports = append(ports, p)
+	}
+	sort.Ints(ports)
+	return ports
+}
+
+// DeepServiceArgs builds the DeepUnknown pass over ports.
+func DeepServiceArgs(hosts []netip.Addr, ports []int, o Opts) []string {
+	scanType := "-sT"
+	if o.Privileged {
+		scanType = "-sS"
+	}
+	args := []string{scanType, "-Pn", "-n", "-p", portList(ports), "-sV",
+		"--version-intensity", strconv.Itoa(DeepIntensity), "--open"}
 	args = appendRate(args, o.MaxRate)
 	if len(hosts) > 0 && hosts[0].Unmap().Is6() {
 		args = append(args, "-6")

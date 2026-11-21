@@ -125,15 +125,10 @@ func (p *Pipeline) service(ctx context.Context, s model.ServiceObs, hostnames []
 	scheme := HTTPScheme(s)
 	var obs model.HTTPObs
 	if scheme != "" && p.Prober != nil {
+		var o model.HTTPObs
+		var err error
+		o, scheme, err = probeScheme(ctx, p.Prober, model.Endpoint{ServiceID: s.ID, Key: s.Key, Scheme: scheme})
 		ep := model.Endpoint{ServiceID: s.ID, Key: s.Key, Scheme: scheme}
-		o, err := p.Prober.Probe(ctx, ep)
-		if err != nil && scheme == "http" && o.Status == 0 {
-			// nmap sometimes labels a TLS port as plain http: retry over TLS.
-			ep.Scheme = "https"
-			if o2, err2 := p.Prober.Probe(ctx, ep); err2 == nil || o2.Status != 0 {
-				o, err, scheme = o2, err2, "https"
-			}
-		}
 		if err != nil {
 			p.log().Debug("http probe failed", "service", diff.KeyString(s.Key), "err", err)
 		}
@@ -173,6 +168,34 @@ func (p *Pipeline) service(ctx context.Context, s model.ServiceObs, hostnames []
 		dets[i].ServiceID = s.ID
 	}
 	return store.ReplaceDetections(ctx, p.Pool, s.ID, dets)
+}
+
+// probeScheme probes ep and, when the scheme nmap suggested looks wrong,
+// the other one, returning the observation that was kept and its scheme.
+//   - A port labelled plain http that does not answer HTTP is retried over
+//     TLS (nmap sometimes misses TLS).
+//   - A port labelled ssl/http whose TLS answer is an empty 404 is retried
+//     over plain http. Some servers accept both on one port (Traefik
+//     entrypoints answer a TLS handshake with their default certificate but
+//     route only plain HTTP there, e.g. the api.insecure dashboard), and the
+//     plain answer is the one worth fingerprinting.
+func probeScheme(ctx context.Context, pr httpfp.Prober, ep model.Endpoint) (model.HTTPObs, string, error) {
+	o, err := pr.Probe(ctx, ep)
+	switch {
+	case err != nil && ep.Scheme == "http" && o.Status == 0:
+		alt := ep
+		alt.Scheme = "https"
+		if o2, err2 := pr.Probe(ctx, alt); err2 == nil || o2.Status != 0 {
+			return o2, "https", err2
+		}
+	case err == nil && ep.Scheme == "https" && o.Status == 404 && o.Title == "":
+		alt := ep
+		alt.Scheme = "http"
+		if o2, err2 := pr.Probe(ctx, alt); err2 == nil && o2.Status != 0 && o2.Status != 404 {
+			return o2, "http", nil
+		}
+	}
+	return o, ep.Scheme, err
 }
 
 func mergeDetections(a, b []model.Detection) []model.Detection {

@@ -20,7 +20,20 @@ type Opts struct {
 	// Ports, when set, is the explicit TCP port list of phase 2: it replaces
 	// --top-ports and disables the ExtraPorts pass.
 	Ports []int
+	// DeepUnknown adds a pass with --version-intensity DeepIntensity over
+	// the open ports the light pass could not name (at most MaxDeepPorts
+	// per address family). Meant for small targets: nmap sends every probe
+	// to each such port, which costs about a minute.
+	DeepUnknown bool
 }
+
+// DeepIntensity is the nmap --version-intensity of the DeepUnknown pass:
+// the lowest level that sends the probes naming PostgreSQL, MySQL and
+// similar services on non-standard ports.
+const DeepIntensity = 4
+
+// MaxDeepPorts caps the ports of one DeepUnknown pass.
+const MaxDeepPorts = 32
 
 // DefaultExtraPorts are TCP ports outside nmap's top 1000 that commonly host
 // exposed infrastructure services.

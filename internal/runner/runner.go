@@ -255,8 +255,13 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 	}
 	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(rate, k), Privileged: r.Privileged,
 		ExtraPorts: pp.Extra, Ports: pp.Ports}
+	// Small targets (localhost, a /28) also get a deeper version pass over
+	// the ports the light pass left unnamed (e.g. PostgreSQL on 15432).
+	if addrs := CountAddrs(plan.Chunks); r.AllPortsMaxAddrs > 0 && addrs > 0 && addrs <= uint64(r.AllPortsMaxAddrs) {
+		opts.DeepUnknown = true
+	}
 	r.log().Info("scan port profile", "run", runID, "profile", pp.Profile, "explicit_ports", len(pp.Ports),
-		"top_ports", cfg.TopPorts, "extra_ports", len(pp.Extra))
+		"top_ports", cfg.TopPorts, "extra_ports", len(pp.Extra), "deep_unknown", opts.DeepUnknown)
 	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", opts.MaxRate)
 
 	var wg sync.WaitGroup
