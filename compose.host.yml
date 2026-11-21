@@ -10,7 +10,7 @@
 # 2. Native mode (asi binary and nmap on the host, any OS): only the database
 #    runs in docker and is published on the host loopback.
 #      docker compose -f compose.yml -f compose.host.yml up -d --wait db
-#    (make native-db), then see README "Skanowanie localhost".
+#    (make native-db), then see README section 2a.
 services:
   db:
     ports:

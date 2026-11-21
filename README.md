@@ -14,7 +14,9 @@ make env                        # .env z losowym hasłem bazy, kluczem AES i has
 grep ASI_SEED_PASSWORD .env     # hasła użytkowników
 ```
 
-Interfejs: **http://127.0.0.1:9080** (port zmienia `ASI_PORT` w `.env`; 9080, żeby nie kolidować z usługami labu na 8080).
+Następnie uruchom aplikację w trybie z sekcji 2a (lab AGH na localhost) albo 2b (własny lab /18). Samo `make up` też startuje bazę i aplikację, ale ze zwykłego kontenera nie widać ani usług hosta, ani sieci labu.
+
+Interfejs po starcie: **http://127.0.0.1:9080** (port zmienia `ASI_PORT` w `.env`; 9080, żeby nie kolidować z usługami labu na 8080).
 
 **Użytkownicy startowi** są tworzeni przy pierwszym starcie na pustej bazie, z hasłami z `.env` (`make env` losuje je do `ASI_SEED_PASSWORD_*`; puste pole oznacza hasło losowe wypisane raz w logu aplikacji, `docker compose logs app`). Zmiana `.env` później nie zmienia haseł istniejących kont.
 
@@ -169,7 +171,7 @@ Testy integracyjne z bazą: `ASI_TEST_DATABASE_URL=postgres://… go test -tags 
 
 Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt przy POST i dla roli Modyfikacja i odczyt przy imporcie, eksport Generic Findings (77 findingów) z walidacją offline i ponownym importem bez fałszywych zmian, szyfrowanie wszystkich 22 tabel, brak próbek w `pg_statistic` i brak jawnego znacznika na dysku.
 
-**Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty, usługi (25/0/0) i zmiany z precision i recall 1.0. Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
+**Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty (1/0/0), usługi (25/0/0) i zmiany (2/0/0) z precision i recall 1.0; detekcje mają recall 1.0 i precision 0,71 (5/2/0), bo sygnatura strony logowania trafiła dodatkowo w dwie aplikacje spoza wzorca (porty 3001 i 18081). Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
 
 Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`make up-hostgw`, `make up-host`, `make native`) z `make seed-demo` i skanem konfiguracji **Demo**: 2 min 52 s dla `host.docker.internal`, około 4 min dla `localhost` (dwa adresy).
 
