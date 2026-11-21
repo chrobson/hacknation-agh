@@ -1,232 +1,229 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE nmaprun>
 <?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
-<!-- Nmap 7.95 scan initiated Sat Nov 21 15:14:12 2026 as: nmap -sn -n -PE -PS21,22,23,25,53,80,110,143,443,445,1883,3306,3389,5432,8080,8443 -PA80,443 -oX - 10.20.0.0/18 -->
-<nmaprun scanner="nmap" args="nmap -sn -n -PE -PS21,22,23,25,53,80,110,143,443,445,1883,3306,3389,5432,8080,8443 -PA80,443 -oX - 10.20.0.0/18" start="1795274052" startstr="Sat Nov 21 15:14:12 2026" version="7.95" xmloutputversion="1.05">
+<!-- Nmap 7.95 scan initiated Sat Nov 21 15:37:33 2026 as: nmap -sn -n -PE -PS21,22,23,25,53,80,110,143,443,445,1883,3306,3389,5432,8080,8443 -PA80,443 -oX - 10.20.0.0/18 -->
+<nmaprun scanner="nmap" args="nmap -sn -n -PE -PS21,22,23,25,53,80,110,143,443,445,1883,3306,3389,5432,8080,8443 -PA80,443 -oX - 10.20.0.0/18" start="1795275453" startstr="Sat Nov 21 15:37:33 2026" version="7.95" xmloutputversion="1.05">
 <verbose level="0"/>
 <debugging level="0"/>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.0.0" addrtype="ipv4"/>
-<address addr="52:50:AA:58:73:FE" addrtype="mac"/>
+<address addr="36:A8:80:4E:80:93" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="229" rttvar="769" to="100000"/>
+<times srtt="197" rttvar="577" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.0.1" addrtype="ipv4"/>
-<address addr="52:50:AA:58:73:FE" addrtype="mac"/>
+<address addr="36:A8:80:4E:80:93" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="105" rttvar="3822" to="100000"/>
+<times srtt="66" rttvar="3843" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.0.10" addrtype="ipv4"/>
-<address addr="4A:F5:EC:DA:EF:96" addrtype="mac"/>
+<address addr="56:12:6A:18:34:F9" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="96" rttvar="5000" to="100000"/>
+<times srtt="83" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.0.11" addrtype="ipv4"/>
-<address addr="DE:64:E8:17:3D:30" addrtype="mac"/>
+<address addr="F2:F0:BA:50:4A:67" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="30" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.1.20" addrtype="ipv4"/>
-<address addr="1E:C4:64:D5:CE:B5" addrtype="mac"/>
+<address addr="86:5D:0B:87:A5:8A" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="225" rttvar="5000" to="100000"/>
+<times srtt="69" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.1.21" addrtype="ipv4"/>
-<address addr="46:AF:A7:D3:B2:85" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="66" rttvar="5000" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.1.30" addrtype="ipv4"/>
-<address addr="BE:55:C1:3C:EE:02" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="43" rttvar="5000" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.2.40" addrtype="ipv4"/>
-<address addr="C2:E2:B8:2D:8C:44" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="75" rttvar="5000" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.3.50" addrtype="ipv4"/>
-<address addr="1A:15:02:A0:4C:41" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="95" rttvar="5000" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.4.60" addrtype="ipv4"/>
-<address addr="6A:AC:80:22:CB:95" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="128" rttvar="2885" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.5.70" addrtype="ipv4"/>
-<address addr="BA:5A:95:6E:6C:FE" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="76" rttvar="3818" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.6.80" addrtype="ipv4"/>
-<address addr="BA:32:8C:75:F5:99" addrtype="mac"/>
-<hostnames>
-</hostnames>
-<times srtt="59" rttvar="5000" to="100000"/>
-</host>
-<host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.7.90" addrtype="ipv4"/>
-<address addr="1E:D3:1C:CA:99:D1" addrtype="mac"/>
+<address addr="EE:86:CA:EE:D5:4A" addrtype="mac"/>
 <hostnames>
 </hostnames>
 <times srtt="28" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
-<address addr="10.20.8.100" addrtype="ipv4"/>
-<address addr="EA:07:0A:7A:04:EB" addrtype="mac"/>
+<address addr="10.20.1.30" addrtype="ipv4"/>
+<address addr="7E:2C:A5:2B:65:DB" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="25" rttvar="5000" to="100000"/>
+<times srtt="70" rttvar="5000" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.2.40" addrtype="ipv4"/>
+<address addr="A2:46:DB:DB:0A:49" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="27" rttvar="5000" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.3.50" addrtype="ipv4"/>
+<address addr="2E:CC:23:74:67:54" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="224" rttvar="1401" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.4.60" addrtype="ipv4"/>
+<address addr="DA:2F:B6:2A:A4:8E" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.5.70" addrtype="ipv4"/>
+<address addr="8A:89:FB:63:C6:9D" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="103" rttvar="1240" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.6.80" addrtype="ipv4"/>
+<address addr="3A:D5:EF:3A:75:9C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="118" rttvar="5000" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.7.90" addrtype="ipv4"/>
+<address addr="0A:1E:29:9C:B4:96" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="257" rttvar="5000" to="100000"/>
+</host>
+<host><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.20.8.100" addrtype="ipv4"/>
+<address addr="0E:7E:2A:98:F1:6F" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<times srtt="149" rttvar="3776" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.9.110" addrtype="ipv4"/>
-<address addr="4E:EA:DE:8F:E3:78" addrtype="mac"/>
+<address addr="C2:78:C3:8D:5E:1B" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="66" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.10.120" addrtype="ipv4"/>
-<address addr="46:F0:68:D6:28:10" addrtype="mac"/>
+<address addr="A2:20:77:BA:8C:34" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="48" rttvar="5000" to="100000"/>
+<times srtt="64" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.11.130" addrtype="ipv4"/>
-<address addr="2A:1A:F9:C9:FD:91" addrtype="mac"/>
+<address addr="52:3C:AA:F6:A6:5E" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="71" rttvar="3834" to="100000"/>
+<times srtt="380" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.12.140" addrtype="ipv4"/>
-<address addr="A2:B8:23:D3:97:3D" addrtype="mac"/>
+<address addr="DA:10:3E:5D:5A:B9" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="240" rttvar="260" to="100000"/>
+<times srtt="187" rttvar="443" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.16.10" addrtype="ipv4"/>
-<address addr="8A:FE:0A:51:D3:37" addrtype="mac"/>
+<address addr="02:E7:9F:60:6C:0B" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="188" rttvar="5000" to="100000"/>
+<times srtt="203" rttvar="2249" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.16.11" addrtype="ipv4"/>
-<address addr="32:FE:C4:D5:CC:F2" addrtype="mac"/>
+<address addr="C6:34:1C:1D:2C:48" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="123" rttvar="5000" to="100000"/>
+<times srtt="193" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.20.20" addrtype="ipv4"/>
-<address addr="FA:ED:C2:8A:B0:78" addrtype="mac"/>
+<address addr="92:9E:F9:1A:F9:B9" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="179" rttvar="1246" to="100000"/>
+<times srtt="191" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.20.21" addrtype="ipv4"/>
-<address addr="32:DF:D2:31:68:A9" addrtype="mac"/>
+<address addr="86:0E:86:BC:99:21" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="71" rttvar="5000" to="100000"/>
+<times srtt="147" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.24.30" addrtype="ipv4"/>
-<address addr="76:7C:AA:59:96:D1" addrtype="mac"/>
+<address addr="6A:56:D4:3D:99:AB" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="116" rttvar="5000" to="100000"/>
+<times srtt="264" rttvar="94" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.28.40" addrtype="ipv4"/>
-<address addr="2E:17:53:B8:19:C2" addrtype="mac"/>
+<address addr="5E:BF:43:99:C2:07" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="300" rttvar="58" to="100000"/>
+<times srtt="206" rttvar="1648" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.32.50" addrtype="ipv4"/>
-<address addr="DA:33:18:81:3D:18" addrtype="mac"/>
+<address addr="66:2E:99:5B:48:13" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="309" rttvar="1662" to="100000"/>
+<times srtt="55" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.40.70" addrtype="ipv4"/>
-<address addr="86:44:D2:79:C6:E5" addrtype="mac"/>
+<address addr="6E:DE:CA:09:E8:10" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="222" rttvar="5000" to="100000"/>
+<times srtt="202" rttvar="406" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.44.80" addrtype="ipv4"/>
-<address addr="36:33:FB:C3:5F:37" addrtype="mac"/>
+<address addr="F2:10:DD:9B:3F:A1" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="353" rttvar="823" to="100000"/>
+<times srtt="945" rttvar="1413" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.48.90" addrtype="ipv4"/>
-<address addr="CE:83:31:68:A8:13" addrtype="mac"/>
+<address addr="1E:22:61:3A:5A:CC" addrtype="mac"/>
 <hostnames>
 </hostnames>
 <times srtt="159" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.52.100" addrtype="ipv4"/>
-<address addr="02:05:B2:6A:15:F3" addrtype="mac"/>
+<address addr="E6:D7:E6:42:CF:CA" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="159" rttvar="986" to="100000"/>
+<times srtt="143" rttvar="5000" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.56.110" addrtype="ipv4"/>
-<address addr="86:2B:A1:8F:62:A9" addrtype="mac"/>
+<address addr="D6:CE:53:EF:F8:F9" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="265" rttvar="126" to="100000"/>
+<times srtt="331" rttvar="139" to="100000"/>
 </host>
 <host><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.20.58.10" addrtype="ipv4"/>
-<address addr="B2:F4:ED:25:4F:2A" addrtype="mac"/>
+<address addr="3E:7B:0F:B2:E8:55" addrtype="mac"/>
 <hostnames>
 </hostnames>
-<times srtt="138" rttvar="2890" to="100000"/>
+<times srtt="248" rttvar="577" to="100000"/>
 </host>
 <host><status state="up" reason="localhost-response" reason_ttl="0"/>
 <address addr="10.20.63.250" addrtype="ipv4"/>
 <hostnames>
 </hostnames>
 </host>
-<runstats><finished time="1795274258" timestr="Sat Nov 21 15:17:38 2026" summary="Nmap done at Sat Nov 21 15:17:38 2026; 16384 IP addresses (32 hosts up) scanned in 205.42 seconds" elapsed="205.42" exit="success"/><hosts up="32" down="16352" total="16384"/>
+<runstats><finished time="1795275581" timestr="Sat Nov 21 15:39:41 2026" summary="Nmap done at Sat Nov 21 15:39:41 2026; 16384 IP addresses (32 hosts up) scanned in 128.13 seconds" elapsed="128.13" exit="success"/><hosts up="32" down="16352" total="16384"/>
 </runstats>
 </nmaprun>

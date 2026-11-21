@@ -236,10 +236,10 @@ services:
 
   telnet-iot:           # "IoT router": telnet 23 + web management 80 (telnet closed in run2/run3)
     <<: *targets
-    command: ["sh", "-c", "busybox-extras httpd -p 80 -h /www && exec busybox-extras telnetd -F -p 23 -l /lab/telnet-login.sh"]
+    command: ["sh", "-c", "busybox-extras httpd -p 80 -h /www && exec /lab/telnet-banner.sh 23"]
     volumes:
       - ./conf/www/telnet-iot:/www:ro
-      - ./conf/telnet-login.sh:/lab/telnet-login.sh:ro
+      - ./conf/telnet-banner.sh:/lab/telnet-banner.sh:ro
     networks:
       lab: { ipv4_address: 10.20.24.30 }
 

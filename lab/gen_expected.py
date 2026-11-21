@@ -83,7 +83,7 @@ RUN1 = {
     "10.20.20.20": ("ftp-banner", [svc(21, "vsftpd", "3.0.3", "socat fake banner (vsFTPd 3.0.3)")]),
     "10.20.20.21": ("smtp-banner", [svc(25, "Postfix smtpd", "", "socat fake banner (Postfix)")]),
     "10.20.24.30": ("telnet-iot", [
-        svc(23, "BusyBox telnetd", "", "busybox-extras telnetd"),
+        svc(23, "BusyBox telnetd", "", "socat fake banner (BusyBox telnetd negotiation + login prompt)"),
         svc(80, "", "", "busybox-extras httpd (router web UI)", ["router-login"]),
     ]),
     "10.20.28.40": ("legacy-ssh", [svc(22, "OpenSSH", "7.4", "socat fake banner (OpenSSH_7.4)")]),

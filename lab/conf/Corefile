@@ -1,4 +1,11 @@
+# timeouts: CoreDNS closes an idle TCP connection after 3 s by default, which is exactly nmap's
+# "tcpwrapped" threshold for the NULL probe, so -sV flipped between "NLnet Labs NSD" and
+# "tcpwrapped". With 10 s the NULL probe times out cleanly and the DNS probe always answers.
 lab.local:53 {
+    timeouts {
+        read 10s
+        idle 15s
+    }
     hosts {
         10.20.0.10 www.lab.local lab.local staging.lab.local
         10.20.0.11 secure.lab.local
@@ -12,5 +19,9 @@ lab.local:53 {
     }
 }
 .:53 {
+    timeouts {
+        read 10s
+        idle 15s
+    }
     errors
 }

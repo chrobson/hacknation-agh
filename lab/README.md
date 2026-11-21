@@ -14,8 +14,11 @@ Isolated docker network for developing and verifying the scanner. **Scan only th
 ## Usage
 
 ```sh
-lab/change.sh run1        # bring the lab up in variant run1 (also run2, run3); idempotent
+lab/change.sh run1        # bring the lab up in variant run1 (also run2, run3); idempotent;
+                          # returns when every expected service accepts TCP (LAB_WAIT=180 s, 0 = no wait)
 lab/scan.sh run1          # 2-phase nmap from the scanner container -> testdata/nmap/run1_*.xml
+                          # LAB_EXCLUDE=10.20.63.251 lab/scan.sh run1  when other containers (the app)
+                          # are attached to the lab network and must stay out of the saved XML
 python3 lab/compare.py run1 run2 run3   # real XML vs lab/expected/*.json
 python3 lab/gen_expected.py             # regenerate lab/expected/*.json (--check = verify fresh)
 lab/change.sh down        # docker compose down -v --remove-orphans
@@ -48,7 +51,7 @@ Other compose projects can join the lab as an external network:
 | 10.20.16.11 | busybox httpd | 8080 | |
 | 10.20.20.20 | fake FTP banner | 21 | `220 (vsFTPd 3.0.3)` |
 | 10.20.20.21 | fake SMTP banner | 25 | Postfix |
-| 10.20.24.30 | "IoT router" | 23, 80 | busybox telnetd + router web UI (`router-login`) |
+| 10.20.24.30 | "IoT router" | 23, 80 | fake BusyBox telnetd login prompt (socat, `conf/telnet-banner.sh`) + router web UI (`router-login`) |
 | 10.20.28.40 | fake SSH banner | 22 | `SSH-2.0-OpenSSH_7.4` (old version) |
 | 10.20.32.50 | "IP camera" | 80 | busybox httpd (`ip-camera`) |
 | 10.20.36.60 | Memcached 1.6.32 | 11211* | removed in run2 |
@@ -141,5 +144,27 @@ Saved XML: `testdata/nmap/run{1,2,3}_discovery.xml` and `run{1,2,3}_services.xml
 - `variants/run{1,2,3}.yml`, `change.sh`
 - `scanner.Dockerfile`, `targets.Dockerfile`
 - `conf/`: nginx configs, web pages, TLS certificates (lab-only keys, self-signed), tomcat users,
-  mosquitto, CoreDNS, HAProxy, `banner.sh`
+  mosquitto, CoreDNS, HAProxy, `banner.sh`, `telnet-banner.sh`
 - `scan.sh`, `compare.py`, `gen_expected.py`, `expected/`
+
+## Determinism notes
+
+Change detection is checked "to the piece", so every fingerprint has to be the same in every scan.
+Three things were fixed after repeated scans showed flakes:
+
+- **Telnet (10.20.24.30:23)** is a socat banner, not the real busybox telnetd. The real daemon sends
+  the IAC negotiation and the login prompt in separate writes, and nmap reported version `""` or
+  `1.14.0 or later` depending on how they arrived.
+- **CoreDNS (10.20.48.90:53)** has `timeouts { read 10s }`. The default 3 s TCP read timeout equals
+  nmap's tcpwrapped threshold, so the port flipped between `NLnet Labs NSD` and `tcpwrapped`.
+- **`change.sh` waits** until every service in `expected/<run>.json` accepts TCP connections, so a
+  scan started right after a switch does not miss Jenkins, MySQL or Tomcat while they boot.
+- **One lab per docker host.** The compose project name (`asi-lab`) and the subnet are fixed, so two
+  checkouts that run `change.sh` at the same time recreate each other's containers. Run the lab from
+  one checkout only. Any extra container on the network (for example the app at `10.20.63.251`)
+  shows up in discovery; pass it in `LAB_EXCLUDE` to `scan.sh`.
+
+Re-verified 2026-11-21 after these fixes: phase 2 repeated 6x on run1 and 3x on run2 and run3 gave
+identical product/version every time; a `-p- -sV` sweep of every live host in each run matched
+`expected/` exactly, and the differences between consecutive sweeps equal `changes_from_prev`
+(10 for run2, 5 for run3). Cold start to all services reachable: about 30 s. Phase 1 took 64-206 s.

@@ -394,7 +394,7 @@
           "proto": "tcp",
           "product": "BusyBox telnetd",
           "version": "",
-          "actual": "busybox-extras telnetd",
+          "actual": "socat fake banner (BusyBox telnetd negotiation + login prompt)",
           "in_top1000": true,
           "detections": []
         },
