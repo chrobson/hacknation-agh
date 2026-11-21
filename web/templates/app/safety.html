@@ -1,0 +1,35 @@
+{{define "app/safety"}}<section class="card safety" id="safety">
+  <h2>Dowód bezpieczeństwa
+    {{if .Missing}}<span class="badge state state-inactive">brak danych</span>
+    {{else if .Report.OK}}<span class="badge state state-up">wszystkie warunki spełnione</span>
+    {{else}}<span class="badge state state-down">warunek niespełniony</span>{{end}}
+  </h2>
+  {{if .Missing}}
+  <p class="muted">Ten przebieg nie ma pokwitowania (import, przebieg sprzed tej wersji albo przebieg w toku).</p>
+  {{else}}{{with .Report}}
+  <p class="muted">Zmierzone przez skaner w trakcie przebiegu #{{.RunID}}, nie deklarowane. JSON: <a href="/runs/{{.RunID}}/safety.json">/runs/{{.RunID}}/safety.json</a> · CLI: <code>asi audit {{.RunID}}</code></p>
+  <table class="grid">
+    <thead><tr><th>Warunek</th><th>Wynik</th><th>Pomiar</th></tr></thead>
+    <tbody>
+    {{range .Checks}}
+    <tr>
+      <td>{{safetyLabel .Name}}</td>
+      <td>{{if .OK}}<span class="badge state state-up">OK</span>{{else}}<span class="badge state state-down">NIE</span>{{end}}</td>
+      <td>{{.Detail}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <details>
+    <summary>Szczegóły pomiaru ({{.NmapInvocations}} wywołań nmap, sha256 poleceń <code>{{shortHash .ArgvSHA256}}</code>)</summary>
+    <dl>
+      <dt>Pakiety nmap</dt><dd>{{.NmapPackets}} ({{.NmapRawReported}} z {{.NmapInvocations}} wywołań z licznikiem nmap „Raw packets sent”)</dd>
+      <dt>Czas pracy nmap</dt><dd>{{.NmapBusyMs}} ms (suma czasów wywołań {{.NmapElapsedMs}} ms)</dd>
+      <dt>Limit</dt><dd>max_rate {{.ConfiguredMaxRate}}/s, na proces {{.PerWorkerRate}}/s; najszybsze wywołanie ≥ 1 s: {{printf "%.1f" .NmapPeakInvPPS}}/s</dd>
+      <dt>HTTP</dt><dd>GET {{.HTTPGet}}, HEAD {{.HTTPHead}}, inne {{.HTTPOther}}; szczyt {{printf "%.0f" .HTTPPeakRPS}} żądań/s</dd>
+      {{range .ArgvSample}}<dt>Polecenie</dt><dd><code>nmap {{.}}</code></dd>{{end}}
+    </dl>
+    <ul>{{range .Notes}}<li class="muted">{{.}}</li>{{end}}</ul>
+  </details>
+  {{end}}{{end}}
+</section>{{end}}

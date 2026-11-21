@@ -24,6 +24,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/chrobson/hacknation-agh/internal/model"
+	"github.com/chrobson/hacknation-agh/internal/safety"
 )
 
 // Defaults for Options.
@@ -198,7 +199,9 @@ func (p *HTTPProber) client(t target, tlsCfg *tls.Config) *http.Client {
 		MaxResponseHeaderBytes: 64 << 10,
 	}
 	return &http.Client{
-		Transport: tr,
+		// Every request is counted (method, credentials, rate) in the
+		// safety meter of its context, if any.
+		Transport: safety.Transport(tr),
 		Timeout:   p.opt.Timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse

@@ -55,10 +55,16 @@ func NewPages(d web.Deps, rn *runner.Runner, base context.Context, fsys fs.FS) (
 		return nil, fmt.Errorf("template nav: %w", err)
 	}
 	p.tmpl["nav"] = t
+	if t, err = template.New("safety").Funcs(funcs).ParseFS(fsys, "app/safety.html"); err != nil {
+		return nil, fmt.Errorf("template safety: %w", err)
+	}
+	p.tmpl["safety"] = t
 	return p, nil
 }
 
 var tmplFuncs = template.FuncMap{
+	"safetyLabel": safetyLabel,
+	"shortHash":   shortHash,
 	"fmtTime": func(v any) string {
 		switch t := v.(type) {
 		case time.Time:
@@ -219,6 +225,8 @@ func (p *Pages) Mount(r chi.Router) {
 		r.Get("/scans", p.scans)
 		r.Get("/results", p.results)
 		r.Get("/results/services/{id}", p.service)
+		r.Get("/runs/{id}/safety", p.safetyCard)
+		r.Get("/runs/{id}/safety.json", p.safetyJSON)
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Require(auth.PermScansRun))

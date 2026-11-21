@@ -17,6 +17,15 @@ import (
 type Result struct {
 	Hosts    []model.HostObs    // every <host> element, up or down
 	Services []model.ServiceObs // open ports only (state "open")
+	Stats    Stats              // run statistics for the safety receipt
+}
+
+// Stats are the run-level numbers of one nmap report.
+type Stats struct {
+	Elapsed     float64 // <runstats><finished elapsed>, seconds
+	HostsTotal  int     // <runstats><hosts total>
+	ScanType    string  // <scaninfo type>, e.g. "syn", "connect"; "" for -sn
+	NumServices int     // <scaninfo numservices>: ports per host
 }
 
 // UpHosts returns the addresses of hosts reported up, sorted.
@@ -33,16 +42,24 @@ func (r Result) UpHosts() []netip.Addr {
 
 // nmapRun mirrors the subset of the nmap XML schema we need.
 type nmapRun struct {
-	XMLName  xml.Name   `xml:"nmaprun"`
+	XMLName  xml.Name `xml:"nmaprun"`
+	ScanInfo []struct {
+		Type        string `xml:"type,attr"`
+		NumServices int    `xml:"numservices,attr"`
+	} `xml:"scaninfo"`
 	Hosts    []xmlHost  `xml:"host"`
 	RunStats xmlRunStat `xml:"runstats"`
 }
 
 type xmlRunStat struct {
 	Finished struct {
-		Exit   string `xml:"exit,attr"`
-		ErrMsg string `xml:"errormsg,attr"`
+		Exit    string  `xml:"exit,attr"`
+		ErrMsg  string  `xml:"errormsg,attr"`
+		Elapsed float64 `xml:"elapsed,attr"`
 	} `xml:"finished"`
+	Hosts struct {
+		Total int `xml:"total,attr"`
+	} `xml:"hosts"`
 }
 
 type xmlHost struct {
@@ -95,6 +112,14 @@ func Parse(r io.Reader) (Result, error) {
 		return Result{}, fmt.Errorf("nmap reported error: %s", run.RunStats.Finished.ErrMsg)
 	}
 	var res Result
+	res.Stats.Elapsed = run.RunStats.Finished.Elapsed
+	res.Stats.HostsTotal = run.RunStats.Hosts.Total
+	for _, si := range run.ScanInfo {
+		if res.Stats.ScanType == "" {
+			res.Stats.ScanType = si.Type
+		}
+		res.Stats.NumServices += si.NumServices
+	}
 	seenHost := map[netip.Addr]int{}
 	seenSvc := map[model.AssetKey]bool{}
 	for _, h := range run.Hosts {

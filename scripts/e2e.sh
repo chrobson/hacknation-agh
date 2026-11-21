@@ -20,6 +20,30 @@ case "$mode" in smoke|full|agh-template) ;; *) echo "usage: $0 smoke|full|agh-te
 log() { printf '\n=== %s\n' "$*" >&2; }
 fail() { echo "E2E FAIL: $*" >&2; exit 1; }
 
+# check_receipt <run id> <out file>: the run's safety receipt (asi audit)
+# must show only GET/HEAD, no credentials, no address outside the allowlist
+# and an average nmap rate within max_rate.
+check_receipt() {
+  log "safety receipt (run $1)"
+  asi audit "$1" > "$2" || { cat "$2" >&2; fail "asi audit $1"; }
+  python3 - "$2" <<'PY' >&2 || fail "safety receipt run $1"
+import json, sys
+r = json.load(open(sys.argv[1]))
+print(f"run {r['run_id']}: nmap {r['nmap_invocations']} calls, {r['nmap_packets']} packets "
+      f"({r['nmap_raw_reported']} with nmap counter) in {r['nmap_busy_ms']} ms = {r['effective_pps']} pps "
+      f"(max_rate {r['configured_max_rate']}); HTTP GET {r['http_get']} HEAD {r['http_head']} "
+      f"other {r['http_other']} auth {r['http_auth_headers']} peak {r['http_peak_rps']}/s; "
+      f"targets {r['targets_checked']} outside {r['targets_outside_allowlist']}")
+assert r['nmap_invocations'] > 0, "no nmap invocation recorded"
+assert r['http_other'] == 0, "non GET/HEAD request"
+assert r['http_auth_headers'] == 0, "request with credentials"
+assert r['targets_outside_allowlist'] == 0, "address outside the allowlist"
+assert r['targets_checked'] > 0, "no target re-checked"
+if r['configured_max_rate'] > 0:
+    assert r['effective_pps'] <= r['configured_max_rate'], "average nmap rate above max_rate"
+PY
+}
+
 # agh_template runs the quickstart scenario of the AGH lab template
 # (docker-compose-custom-network.yml: httpbin 8888, PostgreSQL 15432,
 # RabbitMQ 5673/15673, Gitea 3001/2223, nginx 8787) against services
@@ -132,7 +156,10 @@ agh_template() {
     log "scan ($1)"
     asi scan agh-template | tee "$out/scan_$1.json" >&2
     grep -q '"status":"done"' "$out/scan_$1.json" || fail "scan $1 not done"
-    python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$out/scan_$1.json"
+    local id
+    id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$out/scan_$1.json")
+    check_receipt "$id" "$out/safety_$1.json"
+    echo "$id"
   }
   has() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
   want=(8888 15432 5673 15673 3001 2223)
@@ -274,6 +301,7 @@ scan_and_verify() {
   log "scan ($run)"
   asi scan | tee "$OUT/scan_$run.json"
   grep -q '"status":"done"' "$OUT/scan_$run.json" || fail "scan $run not done"
+  check_receipt "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$OUT/scan_$run.json")" "$OUT/safety_$run.json"
   log "verify ($run)"
   if ! asi verify "/tmp/$run.json" -min "$MIN" > "$OUT/verify_$run.json"; then
     cat "$OUT/verify_$run.json"; fail "verify $run"
