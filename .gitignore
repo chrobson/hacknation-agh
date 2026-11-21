@@ -2,3 +2,6 @@ bin/
 .env
 *.local
 tmp/
+
+# Notatki robocze (plany, research, ustalenia, taski): tylko lokalnie, nie trafiają do repo
+notes/
