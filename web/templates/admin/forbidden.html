@@ -1,0 +1,11 @@
+{{define "title"}}Brak dostępu · Attack Surface Intelligence{{end}}
+{{define "nav"}}{{template "authnav" .}}{{end}}
+{{define "content"}}
+<section class="card narrow">
+  <h1>Brak dostępu (403)</h1>
+  <p>{{.Message}}</p>
+  <p>Skontaktuj się z administratorem, jeśli potrzebujesz tego uprawnienia.</p>
+  <p><a href="/">Wróć do panelu</a></p>
+</section>
+{{end}}
+{{template "base" .}}

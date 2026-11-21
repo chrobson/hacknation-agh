@@ -1,0 +1,17 @@
+{{define "title"}}Dziennik zdarzeń · Attack Surface Intelligence{{end}}
+{{define "nav"}}{{template "authnav" .}}{{end}}
+{{define "content"}}
+<h1>Dziennik zdarzeń</h1>
+<p>Ostatnie 200 wpisów: logowania oraz zmiany użytkowników i ról.</p>
+<table>
+  <thead><tr><th>Czas</th><th>Użytkownik</th><th>Akcja</th><th>Obiekt</th><th>Szczegóły</th></tr></thead>
+  <tbody>
+  {{range .Audit}}
+    <tr><td>{{.At}}</td><td>{{if .Login}}{{.Login}}{{else}}—{{end}}</td><td>{{.Action}}</td><td>{{.Entity}}</td><td><code>{{.Details}}</code></td></tr>
+  {{else}}
+    <tr><td colspan="5">Brak wpisów.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{template "base" .}}
