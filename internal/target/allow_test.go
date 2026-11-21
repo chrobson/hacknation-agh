@@ -34,6 +34,15 @@ func TestAllowlist(t *testing.T) {
 	if err := al.CheckPrefixes([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}); !errors.Is(err, ErrNotAllowed) {
 		t.Errorf("want ErrNotAllowed, got %v", err)
 	}
+	lo := NewAllowlist([]netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")})
+	for _, a := range []string{"127.0.0.1", "127.0.0.53", "::1", "::ffff:127.0.0.1"} {
+		if !lo.AllowsAddr(netip.MustParseAddr(a)) {
+			t.Errorf("loopback %s must be allowed", a)
+		}
+	}
+	if lo.AllowsAddr(netip.MustParseAddr("::2")) || lo.AllowsPrefix(netip.MustParsePrefix("::/120")) {
+		t.Error("only ::1 of the IPv6 space is loopback")
+	}
 	if NewAllowlist(nil).AllowsAddr(netip.MustParseAddr("10.20.0.1")) {
 		t.Error("empty allowlist must allow nothing")
 	}
