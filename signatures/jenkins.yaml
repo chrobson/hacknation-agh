@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 90
 description: Serwer CI Jenkins (nagłówki X-Jenkins/X-Hudson, tytuł, zasoby statyczne).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078, T1190]
 remediation: 'Ogranicz Jenkinsa do sieci wewnętrznej, wyłącz dostęp anonimowy i rejestrację, utrzymuj aktualne wtyczki.'
 matchers:

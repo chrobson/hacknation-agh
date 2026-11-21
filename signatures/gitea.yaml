@@ -4,7 +4,7 @@ category: other
 confidence: 90
 description: Serwis Git Gitea (ciasteczko i_like_gitea, stopka „Powered by Gitea”).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078]
 remediation: 'Wyłącz otwartą rejestrację i ogranicz dostęp do Gitei do sieci firmowej lub SSO.'
 matchers:

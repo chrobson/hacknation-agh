@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 90
 description: Panel Grafana (tytuł, grafanaBootData, ciasteczko grafana_session, /api/health z wersją).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078]
 remediation: 'Udostępniaj Grafanę przez SSO lub VPN, wyłącz rejestrację i dostęp anonimowy, zmień domyślne hasło admin.'
 matchers:

@@ -5,7 +5,7 @@ confidence: 90
 severity: low
 description: Serwer Redis rozpoznany przez nmap (produkt lub nazwa usługi). Baza danych w pamięci nie powinna być dostępna z sieci.
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1190]
 remediation: 'Ogranicz dostęp do portu 6379 regułami zapory do hostów aplikacji i włącz TLS.'
 matchers:

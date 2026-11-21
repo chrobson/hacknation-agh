@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 90
 description: Panel bazy danych Adminer (tytuł, ciasteczko adminer_*, wersja w stopce).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078, T1190]
 remediation: 'Usuń Adminera z serwera lub ogranicz go do sieci administracyjnej.'
 matchers:

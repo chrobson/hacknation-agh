@@ -5,7 +5,7 @@ confidence: 90
 severity: medium
 description: Serwer PostgreSQL przyjmuje połączenia z sieci (produkt lub nazwa usługi z nmapa). Bazy danych nie powinny być wystawione poza sieć aplikacji.
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1190]
 remediation: 'Ogranicz port 5432 zaporą i pg_hba.conf do serwerów aplikacji oraz wymuś TLS.'
 matchers:

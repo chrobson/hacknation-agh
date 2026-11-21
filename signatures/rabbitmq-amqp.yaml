@@ -5,7 +5,7 @@ confidence: 85
 severity: low
 description: Port AMQP brokera RabbitMQ rozpoznany przez nmap (produkt RabbitMQ, usługa amqp).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1190]
 remediation: 'Ogranicz port AMQP do hostów aplikacji, usuń konto guest i włącz TLS.'
 matchers:

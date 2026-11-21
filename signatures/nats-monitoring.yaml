@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 85
 description: Endpoint monitoringu serwera NATS (port 8222, strona z odnośnikami /varz, /connz).
 condition: or
-cwe: [200]
+cwe: [497]
 remediation: 'Zwiąż port monitoringu NATS (8222) z localhost lub siecią monitoringu.'
 matchers:
   - type: body

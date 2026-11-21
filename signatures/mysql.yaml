@@ -8,7 +8,7 @@ condition: or
 outdated:
   below: "8.0"
   severity: high
-cwe: [1104, 668]
+cwe: [1104, 1327]
 attack: [T1190]
 remediation: 'Zaktualizuj MySQL do wspieranej wersji i ogranicz port 3306 do serwerów aplikacji.'
 matchers:

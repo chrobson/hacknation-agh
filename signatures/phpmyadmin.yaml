@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 95
 description: Panel phpMyAdmin (tytuł, ciasteczka phpMyAdmin/pma_*, ścieżka /phpmyadmin/).
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078, T1190]
 remediation: 'Ogranicz phpMyAdmina do sieci administracyjnej lub VPN i wymuś dodatkowe uwierzytelnianie na serwerze WWW.'
 matchers:

@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 90
 description: Panel zarządzania brokerem RabbitMQ (rabbitmq_management, typowo port 15672). Wykrycie po tytule strony i skryptach interfejsu, bez prób logowania.
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078]
 remediation: 'Ogranicz panel RabbitMQ (15672) do sieci administracyjnej i usuń domyślne konto guest.'
 matchers:

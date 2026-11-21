@@ -4,7 +4,7 @@ category: admin-panel
 confidence: 60
 description: Ogólny panel administracyjny pod /admin (Basic auth albo formularz z hasłem). Tylko GET, bez prób logowania.
 condition: or
-cwe: [668]
+cwe: [1327]
 attack: [T1078, T1133]
 remediation: 'Udostępniaj panel administracyjny tylko z sieci administracyjnej lub przez VPN i wymuś MFA.'
 matchers:
