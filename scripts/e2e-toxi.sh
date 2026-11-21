@@ -132,10 +132,12 @@ show() { # show <run> <label>: services and change rows of a run
              FROM services WHERE run_id=$1 AND ip='$ip' AND vhost='' ORDER BY port"
     echo "--- $2 (run $1): changes"
     psql_db "SELECT kind, port, coalesce(field,''), left(coalesce(old,''),50) || ' -> ' || left(coalesce(new,''),50)
-             FROM changes WHERE run_id=$1 ORDER BY kind, port, field"
+             FROM changes WHERE run_id=$1 AND ip='$ip' ORDER BY kind, port, field"
   } | tee -a "$out/changes.txt" >&2
 }
-count() { psql_db "SELECT count(*) FROM changes WHERE run_id=$1 AND $2"; }
+# Counted for the first IPv4 address of the target only: on Linux "localhost"
+# also resolves to ::1, which is a second host with its own (identical) rows.
+count() { psql_db "SELECT count(*) FROM changes WHERE run_id=$1 AND ip='$ip' AND $2"; }
 toxic() { # toxic <json>
   curl -fsS -X POST "$api/proxies/wordpress/toxics" -H 'Content-Type: application/json' -d "$1" >/dev/null || fail "toxic $1"
 }
