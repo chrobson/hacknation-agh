@@ -1,0 +1,15 @@
+# Scanning services published on the docker host from the app container via
+# host.docker.internal (Docker Desktop on Mac/Windows, OrbStack; on Linux the
+# name maps to the docker bridge gateway, which reaches ports published on
+# 0.0.0.0).
+#   docker compose -f compose.yml -f compose.hostgw.yml up -d --build
+# (make up-hostgw). Add the target "host.docker.internal" (not "localhost":
+# inside the container that is the container itself). The address the name
+# resolves to (192.168.65.254 on Docker Desktop, 0.250.250.254 on OrbStack,
+# 172.17.0.1 on Linux) is added to the allowlist at startup (ASI_ALLOW_HOSTS).
+services:
+  app:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      ASI_ALLOW_HOSTS: ${ASI_ALLOW_HOSTS:-host.docker.internal}

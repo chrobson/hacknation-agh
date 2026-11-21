@@ -30,7 +30,35 @@ Testy:
 make test                # go vet + go test -race
 make e2e-smoke           # laboratorium run1: import, skan, asi verify (precision/recall)
 make e2e                 # run1 → run2 → run3, zmiany, host niestabilny, RBAC, DefectDojo, pg_tde
+make e2e-agh             # szablon AGH na localhost: znikająca i powracająca usługa (niżej)
 ```
+
+## Skanowanie usług na tym hoście (localhost)
+
+Usługi opublikowane przez Dockera na hoście (`ports: "8787:80"`) są widoczne pod `127.0.0.1` hosta. Domyślna allowlista obejmuje `127.0.0.0/8` i `::1`, więc cel `localhost` (lub `127.0.0.1`) przechodzi import. Aplikacja w zwykłym kontenerze widzi jednak tylko własny loopback, dlatego są trzy tryby:
+
+| Tryb | Uruchomienie | Cel do dodania | Kiedy |
+|---|---|---|---|
+| sieć hosta | `make up-host` (`compose.yml` + `compose.host.yml`, `network_mode: host`) | `localhost` | Linux; także OrbStack. Docker Desktop tylko od 4.34 z włączonym host networking |
+| `host.docker.internal` | `make up-hostgw` (`compose.yml` + `compose.hostgw.yml`) | `host.docker.internal` | Docker Desktop (Mac/Windows), OrbStack, Linux |
+| natywnie | `make native` (baza w Dockerze na `127.0.0.1:${ASI_DB_PORT:-55432}`, `bin/asi serve` i `nmap` na hoście) | `localhost` | każdy system z zainstalowanym nmapem |
+
+- W trybie `host.docker.internal` nazwa wskazuje bramę do hosta (Docker Desktop `192.168.65.254`, OrbStack `0.250.250.254`, Linux `172.17.0.1`). `compose.hostgw.yml` ustawia `ASI_ALLOW_HOSTS=host.docker.internal`: aplikacja przy starcie rozwiązuje tę nazwę i dopisuje każdy adres do allowlisty. Na Linuksie przez bramę widać tylko porty opublikowane na `0.0.0.0` (nie na `127.0.0.1`).
+- W trybie sieci hosta interfejs nasłuchuje na `127.0.0.1:${ASI_PORT:-8080}` hosta, a baza jest opublikowana na `127.0.0.1:${ASI_DB_PORT:-55432}`.
+- Natywnie: `asi scan`, `asi import` itd. wymagają `ASI_DATABASE_URL=postgres://asi:<ASI_DB_PASSWORD>@127.0.0.1:55432/asi?sslmode=disable` (cel `make native` ustawia go sam). Bez uprawnień roota nmap używa skanu connect (`-sT`), co dla loopbacku wystarcza.
+- `localhost` rozwiązuje się na `127.0.0.1` i `::1`; oba adresy są skanowane (IPv6 osobnym wywołaniem `nmap -6`).
+- IP hosta lub sieć LAN: dopisz je do `ASI_ALLOWED_CIDRS` w `.env`, np. `ASI_ALLOWED_CIDRS=10.20.0.0/18,127.0.0.0/8,::1/128,192.168.1.10/32` (lub `192.168.1.0/24`), albo podaj nazwę w `ASI_ALLOW_HOSTS`, po czym zrestartuj aplikację. Pojedyncze adresy, CIDR i nazwy spoza listy są odrzucane przy imporcie i przed uruchomieniem nmapa.
+
+**Profil portów** (formularz konfiguracji skanu): `automatyczny` (domyślny) skanuje wszystkie porty TCP (`-p-`), gdy cele obejmują łącznie najwyżej `ASI_ALL_PORTS_MAX_ADDRS` adresów (domyślnie 16, czyli `localhost` czy /28), a w przeciwnym razie najpopularniejsze porty z dodatkowym przebiegiem; `najpopularniejsze + dodatkowe` (top N, typowe porty infrastruktury i własna lista dodatkowych portów, np. `3001,8787,15432`); `własna lista`; `wszystkie` (`-p-`). Usługi Dockera często siedzą poza top 1000 (8787, 15432, 15673, 3001, 2223), dlatego dla małych celów domyślnie skanowane są wszystkie porty. `ASI_SCAN_PORTS` nadal ogranicza każdy profil.
+
+Test end-to-end na szablonie labu AGH (`docker-compose-custom-network.yml`: httpbin 8888, PostgreSQL 15432, RabbitMQ 5673/15673, Gitea 3001/2223, nginx 8787). Pliki szablonu nie są częścią repozytorium; `ASI_AGH_LAB_DIR` wskazuje katalog z nimi (domyślnie `notes/lab-agh`):
+
+```sh
+ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh make e2e-agh                     # tryb domyślny: hostgw (macOS), host (Linux)
+ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh E2E_AGH_MODE=native ./scripts/e2e.sh agh-template
+```
+
+Skrypt uruchamia stack szablonu, skanuje host (profil automatyczny, `-p-`), zatrzymuje usługę na 8787, skanuje ponownie, przywraca ją i skanuje trzeci raz. Sprawdza, że porty szablonu są wykryte w każdym przebiegu, że 8787 znika w drugim (zmiana `gone`) i wraca w trzecim (zmiana `new`), po czym usuwa stack szablonu (`E2E_KEEP=1` zostawia aplikację).
 
 ## Polecenia
 
@@ -58,7 +86,7 @@ Administrator tworzy własne role (checkboxy uprawnień) w **Administracja → R
 ## Bezpieczeństwo skanowania
 
 - Allowlista sieci `ASI_ALLOWED_CIDRS` sprawdzana przy imporcie celów, przy imporcie wyników i ponownie tuż przed uruchomieniem nmapa. `ASI_SCAN_EXCLUDE` to adresy zawsze pomijane.
-- Porty: domyślnie top N portów TCP plus przebieg po typowych portach infrastruktury. Konfiguracja skanu może podać jawną listę (`22,80,8000-8100`), a `ASI_SCAN_PORTS` ogranicza wszystkie skany do listy dozwolonych portów.
+- Porty: profil konfiguracji skanu (automatyczny, najpopularniejsze + dodatkowe, własna lista `22,80,8000-8100`, wszystkie `-p-`; zob. wyżej). `ASI_SCAN_PORTS` ogranicza wszystkie skany do listy dozwolonych portów.
 - Tempo: `max_rate` pakietów/s na cały skan (1 do `ASI_MAX_RATE`, domyślnie 5000), dzielone równo między wątki. Fingerprinting HTTP jest ograniczony do 20 żądań/s, tylko GET/HEAD, bez prób logowania.
 - Okna czasowe i częstotliwość w konfiguracji skanu: skan przerwany na końcu okna wraca do kolejki i jest wznawiany w następnym oknie. Czas lokalny kontenera ustawia `ASI_TZ` (domyślnie Europe/Warsaw).
 - „Zatrzymaj” zatrzymuje przebieg na stałe. Harmonogram wznowi go dopiero po kliknięciu „Wznów”.
