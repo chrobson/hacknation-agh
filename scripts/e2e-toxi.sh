@@ -13,7 +13,8 @@
 # Asserts: run2 and run3 contain 0 'gone' and 0 'changed' rows for the three
 # services, except field response_ms (the response time change is the true
 # signal of the injected delay and is reported on purpose, see
-# internal/diff/latency.go). run4 contains exactly one 'gone': the Toxiproxy
+# internal/diff/latency.go) and field http_status (one row when the proxy
+# starts answering 502/503/504, internal/diff/gateway.go). run4 contains exactly one 'gone': the Toxiproxy
 # API port. Every change row is written to tmp/e2e-toxi/changes.txt.
 #
 # Modes (E2E_TOXI_MODE): host (Linux default: app in the host network
@@ -165,9 +166,9 @@ show "$r3" latency+timeout
 bad=0
 for r in "$r2" "$r3"; do
   g=$(count "$r" "kind='gone'")
-  c=$(count "$r" "kind='changed' AND coalesce(field,'') <> 'response_ms'")
-  l=$(count "$r" "kind='changed' AND field = 'response_ms'")
-  echo "run $r: false gone=$g, false changed=$c, response_ms changed=$l (expected signal)" | tee -a "$out/summary.txt" >&2
+  c=$(count "$r" "kind='changed' AND coalesce(field,'') NOT IN ('response_ms','http_status')")
+  l=$(count "$r" "kind='changed' AND field IN ('response_ms','http_status')")
+  echo "run $r: false gone=$g, false changed=$c, response_ms/http_status changed=$l (expected signal)" | tee -a "$out/summary.txt" >&2
   [ "$g" = 0 ] && [ "$c" = 0 ] || bad=1
 done
 
