@@ -6,7 +6,7 @@ System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i us
 
 ## 2. Szybki start
 
-Wymagania: Docker z Compose v2 (2.24 lub nowszy, bo `compose.host.yml` używa `!reset`), `make`, `openssl`. Tryb natywny wymaga też Go 1.26+ i nmapa na hoście.
+Wymagania: Docker z pluginem Compose v2 (polecenie `docker compose`), `make`, `openssl`. Pliki Compose nie używają znaczników `!reset`/`!override`, więc nie wymagają Compose 2.24+ (sprawdzone na żywo: Docker Compose 5.5.0 z OrbStack; starszych wersji nie uruchamiano). Tryb natywny wymaga też Go 1.26+ i nmapa na hoście. `make doctor` sprawdza środowisko (Docker i dostęp do demona, Compose v2, `openssl`, wolne porty `ASI_PORT`/`ASI_DB_PORT`) i wskazuje, co poprawić; każde `make up…` uruchamia je samo.
 
 ```sh
 git clone https://github.com/chrobson/hacknation-agh.git && cd hacknation-agh
@@ -61,8 +61,9 @@ docker compose -f docker-compose-custom-network.yml start flask-app
 ```
 
 Uwagi do trybów:
-- **sieć hosta**: interfejs na `127.0.0.1:9080` hosta, baza na `127.0.0.1:${ASI_DB_PORT:-55432}`. Skan obejmuje też porty samej aplikacji (9080, 55432). Docker Desktop obsługuje sieć hosta tylko od 4.34 po włączeniu tej funkcji; OrbStack obsługuje ją od razu (sprawdzone).
+- **sieć hosta**: `compose.host.yml` to samodzielny plik (nie nakłada się go na `compose.yml`), z tą samą nazwą projektu `asi`, więc `docker compose exec app …`, `make seed-demo` i `make down` działają bez `-f`. Interfejs na `127.0.0.1:9080` hosta, baza na `127.0.0.1:${ASI_DB_PORT:-55432}`. Skan obejmuje też porty samej aplikacji (9080, 55432). Docker Desktop obsługuje sieć hosta tylko od 4.34 po włączeniu tej funkcji; OrbStack obsługuje ją od razu (sprawdzone).
 - **`host.docker.internal`**: nazwa wskazuje bramę do hosta (Docker Desktop `192.168.65.254`, OrbStack `0.250.250.254`, Linux `172.17.0.1`). `compose.hostgw.yml` ustawia `ASI_ALLOW_HOSTS=host.docker.internal`, więc aplikacja przy starcie dopisuje ten adres do allowlisty. Na Linuksie przez bramę widać tylko porty opublikowane na `0.0.0.0` (nie na `127.0.0.1`), a zapora (ufw, firewalld) może blokować ruch z mostka Dockera; tam wybierz `make up-host`.
+- **dostęp z innej maszyny**: interfejs nasłuchuje domyślnie tylko na `127.0.0.1` hosta (`ASI_BIND=127.0.0.1` w `.env`). Jeśli aplikacja działa na zdalnym serwerze, najprościej użyć tunelu SSH: `ssh -L 9080:127.0.0.1:9080 użytkownik@serwer`, potem http://127.0.0.1:9080 lokalnie. Alternatywnie `ASI_BIND=0.0.0.0` w `.env` i ponowne `make up-…`: interfejs jest wtedy dostępny pod adresem serwera po zwykłym HTTP (ciasteczko sesji dostaje flagę `Secure` tylko przy TLS, więc logowanie działa), a zapora (ufw, firewalld) musi przepuszczać port 9080 tylko z zaufanych adresów. Baza zawsze nasłuchuje wyłącznie na `127.0.0.1`.
 - **natywnie**: bez roota nmap używa skanu connect (`-sT`), co dla loopbacku wystarcza. Polecenia CLI wymagają `ASI_DATABASE_URL=postgres://asi:<ASI_DB_PASSWORD>@127.0.0.1:55432/asi?sslmode=disable` (`make native` i `make seed-demo` ustawiają go same).
 - **IP hosta lub sieć LAN**: dopisz je do `ASI_ALLOWED_CIDRS` w `.env`, np. `ASI_ALLOWED_CIDRS=10.20.0.0/18,127.0.0.0/8,::1/128,192.168.1.0/24`, i uruchom aplikację ponownie tym samym poleceniem `make up-…`. Jawne `ASI_ALLOWED_CIDRS` zastępuje listę domyślną, więc zostaw w nim `127.0.0.0/8,::1/128`.
 - Zmiana trybu: `docker compose down`, potem inne `make up-…`. Baza zostaje; `make seed-demo` przestawia konfigurację **Demo** na cel właściwy dla nowego trybu.

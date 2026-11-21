@@ -1,4 +1,4 @@
-.PHONY: build test vet e2e-smoke e2e e2e-agh up up-lab up-host up-hostgw native-db native down env seed-demo
+.PHONY: build test vet e2e-smoke e2e e2e-agh up up-lab up-host up-hostgw native-db native down env seed-demo doctor
 
 build:
 	go build -trimpath -o bin/asi ./cmd/asi
@@ -13,26 +13,31 @@ test: vet
 env:
 	@test -f .env || ./scripts/gen-env.sh
 
-up: env
+# Preflight: docker, compose v2, openssl, free ports (scripts/doctor.sh).
+doctor:
+	@./scripts/doctor.sh $(DOCTOR_ARGS)
+
+up: env doctor
 	docker compose up -d --build --wait
 
 # App attached to the docker scan lab (start the lab first: lab/change.sh run1).
-up-lab: env
+up-lab: env doctor
 	docker compose -f compose.yml -f compose.lab.yml up -d --build --wait
 
 # Scanning services published on this host (localhost), see README.
 # Linux: app in the host network namespace (target localhost / 127.0.0.1).
-up-host: env
-	docker compose -f compose.yml -f compose.host.yml up -d --build --wait
+up-host: DOCTOR_ARGS = --db-port
+up-host: env doctor
+	docker compose -f compose.host.yml up -d --build --wait
 
 # Docker Desktop / OrbStack (also Linux): app reaches the host through
 # host.docker.internal (target host.docker.internal).
-up-hostgw: env
+up-hostgw: env doctor
 	docker compose -f compose.yml -f compose.hostgw.yml up -d --build --wait
 
 # Native: database in docker on 127.0.0.1:$${ASI_DB_PORT:-55432}, asi and nmap on the host.
 native-db: env
-	docker compose -f compose.yml -f compose.host.yml up -d --wait db
+	docker compose -f compose.host.yml up -d --wait db
 
 native: build native-db
 	set -a; . ./.env; set +a; \

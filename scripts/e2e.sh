@@ -50,7 +50,7 @@ agh_template() {
   TPL=(docker compose -f "$tplfile")
   case "$amode" in
     hostgw) DC=(docker compose -p "$project" -f compose.yml -f compose.hostgw.yml); target=host.docker.internal ;;
-    host|native) DC=(docker compose -p "$project" -f compose.yml -f compose.host.yml); target=localhost ;;
+    host|native) DC=(docker compose -p "$project" -f compose.host.yml); target=localhost ;;
     *) fail "E2E_AGH_MODE must be hostgw, host or native" ;;
   esac
   target="${E2E_AGH_TARGET:-$target}"

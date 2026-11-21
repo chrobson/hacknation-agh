@@ -1,26 +1,71 @@
-# Scanning services published on the docker host (localhost), two uses:
+# Scanning services published on the docker host (localhost). Standalone
+# file: use it alone, never stacked on compose.yml (no YAML merge tags such as
+# reset/override, which need Compose >= 2.24). Project name stays "asi", so `docker compose exec
+# app ...`, `make seed-demo` and `make down` work against it as well.
+# Keep the db service identical to compose.yml (cmd/asi/compose_test.go).
 #
 # 1. Linux: the app shares the host network namespace, so 127.0.0.1 and
 #    "localhost" inside the app are the host's loopback.
-#      docker compose -f compose.yml -f compose.host.yml up -d --build
-#    (make up-host). The UI listens on 127.0.0.1:${ASI_PORT:-9080} of the host.
-#    Docker Desktop supports host networking only from 4.34 with the feature
-#    turned on; on a Mac prefer compose.hostgw.yml or the native mode.
+#      docker compose -f compose.host.yml up -d --build --wait
+#    (make up-host). The UI listens on ${ASI_BIND:-127.0.0.1}:${ASI_PORT:-9080}
+#    of the host. Docker Desktop supports host networking only from 4.34 with
+#    the feature turned on; on a Mac prefer compose.hostgw.yml or native mode.
 #
 # 2. Native mode (asi binary and nmap on the host, any OS): only the database
 #    runs in docker and is published on the host loopback.
-#      docker compose -f compose.yml -f compose.host.yml up -d --wait db
+#      docker compose -f compose.host.yml up -d --wait db
 #    (make native-db), then see README section 2a.
+name: asi
+
 services:
+  keys-init:
+    image: busybox:1.36
+    command: ["sh", "-c", "chown 26:26 /keys && chmod 700 /keys"]
+    volumes:
+      - pgkeys:/keys
+
   db:
+    image: percona/percona-distribution-postgresql:18.7.1-1
+    command: ["postgres", "-c", "shared_preload_libraries=pg_tde"]
+    depends_on:
+      keys-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_USER: ${ASI_DB_USER:-asi}
+      POSTGRES_PASSWORD: ${ASI_DB_PASSWORD:?set ASI_DB_PASSWORD in .env}
+      POSTGRES_DB: asi
+      TZ: ${ASI_TZ:-Europe/Warsaw}
+    volumes:
+      - pgdata:/data/db
+      - pgkeys:/keys
+      - ./deploy/db/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "127.0.0.1:${ASI_DB_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ASI_DB_USER:-asi} -d asi"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   app:
+    build: .
     network_mode: host
-    ports: !reset []
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
     environment:
       ASI_DATABASE_URL: postgres://${ASI_DB_USER:-asi}:${ASI_DB_PASSWORD}@127.0.0.1:${ASI_DB_PORT:-55432}/asi?sslmode=disable
-      ASI_HTTP_ADDR: 127.0.0.1:${ASI_PORT:-9080}
+      # Scan windows and UI times use the container's local time.
+      TZ: ${ASI_TZ:-Europe/Warsaw}
+      # Host network: the app listens directly on the host (overrides .env).
+      ASI_HTTP_ADDR: ${ASI_BIND:-127.0.0.1}:${ASI_PORT:-9080}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${ASI_PORT:-9080}/healthz || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+volumes:
+  pgdata: {}
+  pgkeys: {}
