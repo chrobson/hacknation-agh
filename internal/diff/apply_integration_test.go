@@ -359,3 +359,46 @@ func TestApplyRunImportScope(t *testing.T) {
 		t.Errorf("scan after import: prev %d (want %d), changes %q", res.PrevRunID, scan1, fmtChanges(res.Changes))
 	}
 }
+
+// Response times stored in http_obs produce a "changed response_ms" row only
+// when they move by more than max(300 ms, 2x) between two scan runs.
+func TestApplyRunLatencyChange(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
+	services := []model.ServiceObs{
+		svc(0, "127.0.0.1", 8085, "Apache httpd", "2.4.62"),
+		svc(0, "127.0.0.1", 8888, "gunicorn", "19.9.0"),
+	}
+	setMS := func(runID int64, port int, ms int) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO http_obs (service_id, url, status, response_ms)
+			SELECT id, 'http://127.0.0.1/', 200, $3 FROM services WHERE run_id = $1 AND port = $2`, runID, port, ms); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r1 := insertRun(t, pool, labRun{hosts: []string{"127.0.0.1"}, services: services, chunks: []string{"127.0.0.1/32"}})
+	setMS(r1, 8085, 32)
+	setMS(r1, 8888, 15)
+	if _, err := ApplyRun(ctx, pool, r1, testCfg, t0); err != nil {
+		t.Fatal(err)
+	}
+	r2 := insertRun(t, pool, labRun{hosts: []string{"127.0.0.1"}, services: services, chunks: []string{"127.0.0.1/32"}})
+	setMS(r2, 8085, 1108) // Toxiproxy latency 500 ms each way
+	setMS(r2, 8888, 41)   // jitter
+	res, err := ApplyRun(ctx, pool, r2, testCfg, t0.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`changed 127.0.0.1:8085/tcp response_ms "32 ms"->"1108 ms"`}
+	if g := fmtChanges(res.Changes); !reflect.DeepEqual(g, want) {
+		t.Errorf("changes %q, want %q", g, want)
+	}
+	stored, err := store.ListChanges(ctx, pool, r2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := fmtChanges(stored); !reflect.DeepEqual(g, want) {
+		t.Errorf("stored changes %q, want %q", g, want)
+	}
+}

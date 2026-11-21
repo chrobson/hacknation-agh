@@ -24,9 +24,11 @@
   <h2>Detekcje</h2>
   {{if .Detections}}
   <table>
-    <thead><tr><th>Sygnatura</th><th>Kategoria</th><th class="num">Pewność</th><th>Dowody</th></tr></thead>
+    <thead><tr><th>Sygnatura</th><th>Kategoria</th><th>Poziom</th><th class="num">Pewność</th><th>Dowody</th></tr></thead>
     <tbody>{{range .Detections}}
-      <tr><td><a href="/signatures/{{.SignatureID}}">{{.Name}}</a></td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td><td class="num">{{.Confidence}}%</td>
+      <tr><td><a href="/signatures/{{.SignatureID}}">{{.Name}}</a></td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td>
+          <td>{{with index .Evidence "severity"}}<span class="badge sev sev-{{.}}">{{.}}</span>{{else}}<span class="muted">domyślny</span>{{end}}{{with index .Evidence "outdated"}} <span class="bad">nieaktualna wersja</span>{{end}}</td>
+          <td class="num">{{.Confidence}}%</td>
           <td>{{range $k, $v := .Evidence}}<code>{{$k}}</code>: {{$v}}<br>{{end}}</td></tr>
     {{end}}</tbody>
   </table>
@@ -38,6 +40,7 @@
   <dl>
     <dt>URL</dt><dd><code>{{.URL}}</code></dd>
     <dt>Kod odpowiedzi</dt><dd>{{.Status}}</dd>
+    <dt>Czas odpowiedzi</dt><dd>{{if .ResponseMS}}{{.ResponseMS}} ms{{if ge .ResponseMS 1000}} <span class="bad">wolna odpowiedź</span>{{end}}{{else}}<span class="muted">nie zmierzono</span>{{end}}</dd>
     <dt>Tytuł</dt><dd>{{.Title}}</dd>
     {{with .FaviconMMH3}}<dt>Favicon (mmh3)</dt><dd><code>{{.}}</code></dd>{{end}}
     {{if .BodySHA256}}<dt>SHA-256 treści</dt><dd><code>{{.BodySHA256}}</code></dd>{{end}}

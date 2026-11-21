@@ -149,7 +149,7 @@ func BuildFindings(date time.Time, svcs []Service, anns []Annotation) []model.Fi
 		dets := append([]model.Detection(nil), s.Detections...)
 		sort.Slice(dets, func(i, j int) bool { return dets[i].SignatureID < dets[j].SignatureID })
 		for _, d := range dets {
-			sev := detectionSeverity(d.Category)
+			sev := DetectionSeverity(d)
 			if o := normalizeSeverity(override); validSeverity(string(o)) {
 				sev = o
 			}
@@ -186,6 +186,17 @@ func annotationKey(k model.AssetKey) model.AssetKey {
 // AnnotationKey exposes annotationKey to the export package.
 func AnnotationKey(k model.AssetKey) model.AssetKey { return annotationKey(k) }
 
+// DetectionSeverity is the default severity of a detection: the severity
+// the signature recorded in evidence["severity"] (its own level, or the
+// raised level of an outdated version), otherwise Medium for admin panels
+// and staging environments and Info for other technologies.
+func DetectionSeverity(d model.Detection) model.Severity {
+	if s := normalizeSeverity(d.Evidence["severity"]); validSeverity(string(s)) {
+		return s
+	}
+	return detectionSeverity(d.Category)
+}
+
 func detectionSeverity(category string) model.Severity {
 	switch category {
 	case "admin-panel", "staging":
@@ -206,6 +217,9 @@ func detectionTitle(d model.Detection) string {
 	name := d.Name
 	if name == "" {
 		name = d.SignatureID
+	}
+	if d.Evidence["outdated"] != "" && d.Evidence["version"] != "" {
+		return oneLine("Outdated software detected: " + name + " " + d.Evidence["version"])
 	}
 	switch d.Category {
 	case "admin-panel":

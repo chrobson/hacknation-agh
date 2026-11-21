@@ -1,0 +1,12 @@
+id: redis
+name: Redis
+category: server
+confidence: 90
+severity: low
+description: Serwer Redis rozpoznany przez nmap (produkt lub nazwa usługi). Baza danych w pamięci nie powinna być dostępna z sieci.
+condition: or
+matchers:
+  - type: service
+    product: '(?i)^Redis(?: key-value store)?(?: (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?))?'
+  - type: service
+    banner: '^redis'

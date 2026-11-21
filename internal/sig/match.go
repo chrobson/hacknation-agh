@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -140,30 +141,47 @@ func (ev *evaluator) hasHTTP() bool { return ev.obs.Status != 0 }
 func (ev *evaluator) signature(s *Signature) (map[string]string, bool) {
 	and := s.Condition == "and"
 	evidence := map[string]string{}
+	// Order: passive matchers, path probes, then version-only matchers.
 	ordered := make([]*MatcherSpec, 0, len(s.Matchers))
-	for i := range s.Matchers {
-		if s.Matchers[i].Type != TypePath {
-			ordered = append(ordered, &s.Matchers[i])
-		}
-	}
-	for i := range s.Matchers {
-		if s.Matchers[i].Type == TypePath {
-			ordered = append(ordered, &s.Matchers[i])
+	wantVersion := s.Outdated != nil
+	for pass := 0; pass < 3; pass++ {
+		for i := range s.Matchers {
+			m := &s.Matchers[i]
+			if m.VersionOnly {
+				wantVersion = true
+			}
+			if (pass == 0 && !m.VersionOnly && m.Type != TypePath) ||
+				(pass == 1 && !m.VersionOnly && m.Type == TypePath) ||
+				(pass == 2 && m.VersionOnly) {
+				ordered = append(ordered, m)
+			}
 		}
 	}
 	matched := false
 	for _, m := range ordered {
+		if m.VersionOnly && !matched {
+			break // version-only matchers never establish a match
+		}
+		if matched && !and {
+			// "or" is satisfied. A signature that wants a version keeps
+			// looking for one, asking only matchers that can give it.
+			if !wantVersion || evidence["version"] != "" {
+				break
+			}
+			if !m.hasVersionGroup() {
+				continue
+			}
+		}
 		ev.version = ""
 		key, val, ok := ev.matcher(m)
 		if ok {
-			evidence[key] = clip(val)
+			if _, dup := evidence[key]; !dup {
+				evidence[key] = clip(val)
+			}
 			if ev.version != "" && evidence["version"] == "" {
 				evidence["version"] = clip(ev.version)
 			}
 			matched = true
-			if !and {
-				break
-			}
 		} else if and {
 			return nil, false
 		}
@@ -171,7 +189,35 @@ func (ev *evaluator) signature(s *Signature) (map[string]string, bool) {
 	if !matched {
 		return nil, false
 	}
+	applySeverity(s, evidence)
 	return evidence, true
+}
+
+// applySeverity records the export severity of a detection in its evidence:
+// the signature's severity, raised by the outdated rule when the detected
+// version is older than outdated.below.
+func applySeverity(s *Signature, evidence map[string]string) {
+	if s.Severity != "" {
+		evidence["severity"] = DojoSeverity(s.Severity)
+	}
+	o := s.Outdated
+	if o == nil || evidence["version"] == "" {
+		return
+	}
+	if c, ok := CompareVersions(evidence["version"], o.Below); ok && c < 0 {
+		evidence["outdated"] = "version " + evidence["version"] + " < " + o.Below
+		evidence["severity"] = DojoSeverity(o.Severity)
+	}
+}
+
+// hasVersionGroup reports whether a matcher's regex captures a version.
+func (m *MatcherSpec) hasVersionGroup() bool {
+	for _, re := range []*regexp.Regexp{m.re, m.prodRe, m.bannerRe} {
+		if re != nil && re.SubexpIndex("version") > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func clip(s string) string {
@@ -201,18 +247,53 @@ func headerValues(h map[string][]string, name string) []string {
 // find returns the full match of m.re in s. A named group "version", when
 // it participated, is remembered and stored as evidence["version"].
 func (ev *evaluator) find(m *MatcherSpec, s string) (string, bool) {
-	loc := m.re.FindStringSubmatchIndex(s)
+	return ev.findRe(m.re, s)
+}
+
+func (ev *evaluator) findRe(re *regexp.Regexp, s string) (string, bool) {
+	loc := re.FindStringSubmatchIndex(s)
 	if loc == nil {
 		return "", false
 	}
-	if i := m.re.SubexpIndex("version"); i > 0 && loc[2*i] >= 0 && loc[2*i+1] > loc[2*i] {
+	if i := re.SubexpIndex("version"); i > 0 && loc[2*i] >= 0 && loc[2*i+1] > loc[2*i] {
 		ev.version = s[loc[2*i]:loc[2*i+1]]
 	}
 	return s[loc[0]:loc[1]], true
 }
 
-// matcher returns an evidence key/value when m matches.
+// matcher returns an evidence key/value when m matches (or, for a negated
+// matcher, when it does not).
 func (ev *evaluator) matcher(m *MatcherSpec) (string, string, bool) {
+	if !m.Negate {
+		return ev.positive(m)
+	}
+	if m.Type != TypeService && !ev.hasHTTP() {
+		return "", "", false
+	}
+	_, _, ok := ev.positive(m)
+	ev.version = ""
+	if ok {
+		return "", "", false
+	}
+	return "not:" + m.Type, "no match: " + m.describe(), true
+}
+
+// describe is the pattern of a matcher, for negated-match evidence.
+func (m *MatcherSpec) describe() string {
+	var parts []string
+	if m.Name != "" {
+		parts = append(parts, m.Name)
+	}
+	for _, p := range []string{m.Regex, m.Product, m.Banner} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// positive evaluates m without negation.
+func (ev *evaluator) positive(m *MatcherSpec) (string, string, bool) {
 	switch m.Type {
 	case TypeService:
 		return ev.service(m)
@@ -300,16 +381,16 @@ func (ev *evaluator) service(m *MatcherSpec) (string, string, bool) {
 	val := "port " + strconv.Itoa(int(ev.svc.Key.Port))
 	if m.prodRe != nil {
 		s := strings.TrimSpace(ev.svc.Product + " " + ev.svc.Version)
-		v := m.prodRe.FindString(s)
-		if v == "" {
+		v, ok := ev.findRe(m.prodRe, s)
+		if !ok || v == "" {
 			return "", "", false
 		}
 		val = v
 	}
 	if m.bannerRe != nil {
 		s := strings.TrimSpace(ev.svc.Banner + " " + ev.svc.ExtraInfo)
-		v := m.bannerRe.FindString(s)
-		if v == "" {
+		v, ok := ev.findRe(m.bannerRe, s)
+		if !ok || v == "" {
 			return "", "", false
 		}
 		val = v

@@ -8,9 +8,9 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
 |---|---|---|
 | `internal/target` | parsowanie IP/CIDR/domen, deduplikacja, podział na chunki, **allowlista** | `Allowlist` |
 | `internal/scan` + `internal/runner` | nmap: faza 1 `-sn`, faza 2 usługi z wersjami; pula workerów, `--max-rate R/K`, okna czasowe przez `context` z deadline; kolejka chunków `FOR UPDATE SKIP LOCKED` | `scan.Scanner` |
-| `internal/httpfp` | GET/HEAD, ≤5 przekierowań, body ≤2 MB, tytuł, nagłówki, ciasteczka, certyfikat TLS (expired/self-signed/mismatch), favicon mmh3 | `httpfp.Prober` |
-| `internal/sig` | sygnatury YAML (tylko GET/HEAD, ≤3 ścieżki, bez body i nagłówków auth) | `sig.Matcher` |
-| `internal/diff` | porównanie przebiegów po kluczu naturalnym, stany hostów up/down/inactive/unstable | `diff.Compare` (czysta funkcja) |
+| `internal/httpfp` | GET/HEAD, ≤5 przekierowań, body ≤2 MB, tytuł, nagłówki, ciasteczka, certyfikat TLS (expired/self-signed/mismatch), favicon mmh3, czas odpowiedzi (`http_obs.response_ms`); timeout `ASI_HTTP_TIMEOUT` (10 s) i `ASI_HTTP_RETRIES` (1) ponowienie po timeoucie lub zerwanym połączeniu | `httpfp.Prober` |
+| `internal/sig` | sygnatury YAML (tylko GET/HEAD, ≤3 ścieżki, bez body i nagłówków auth); opcjonalnie `severity`, `outdated` (`below`, `severity`: wyższy poziom dla starszej wersji), `negate` i `version_only` (ścieżka odpytywana tylko po trafieniu, żeby odczytać wersję) | `sig.Matcher` |
+| `internal/diff` | porównanie przebiegów po kluczu naturalnym, stany hostów up/down/inactive/unstable; zmiana czasu odpowiedzi HTTP o więcej niż max(300 ms, 2×) jako `changed` z polem `response_ms` | `diff.Compare` (czysta funkcja) |
 | `internal/auth` | sesje, bcrypt, RBAC (`Require(perm)` → 403), CSRF: `http.CrossOriginProtection` + `SameSite=Lax`, AES-GCM dla tabeli `secrets` | |
 | `internal/dojo`, `internal/export` | DefectDojo Generic Findings JSON (eksport i import), CSV, import XML nmapa | `dojo.Codec` |
 | `internal/web` | routing chi; każdy moduł udostępnia `Mount(r, Deps)`; szablony dziedziczą z `web/templates/base.html` | `web.Mounter` |
@@ -21,7 +21,7 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
 ## Kontrakt danych
 
 - **Klucz naturalny usługi** `model.AssetKey{IP, Port, Proto, VHost}`. Służy do diffu, adnotacji (przetrwają kolejne skany) i do `unique_id_from_tool` w DefectDojo.
-- **Schemat**: `migrations/0001_init.sql` (zamrożony). Migracje modułów mają zakresy: 0100 targets, 0200 scan, 0300 fingerprint, 0400 diff, 0500 auth, 0600 dojo/export.
+- **Schemat**: `migrations/0001_init.sql` (zamrożony). Migracje modułów mają zakresy: 0100 targets, 0200 scan, 0300 fingerprint, 0400 diff, 0500 auth, 0600 dojo/export, 0700 hardening, 0810 czas odpowiedzi HTTP.
 - **Uprawnienia**: `targets.read`, `targets.write`, `scans.run`, `results.read`, `results.edit`, `signatures.write`, `export`, `users.admin`. Wbudowane role:
 
 | Rola | Uprawnienia |
@@ -41,7 +41,7 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
   - `unique_id_from_tool`: `asi:svc:<ip>:<port>/<proto>` lub `asi:sig:<ip>:<port>:<sig_id>`, unikalne w pliku. Gdy usługa ma wirtualny host, dochodzi sufiks `@<vhost>` (`asi:svc:<ip>:<port>/<proto>@<vhost>`, `asi:sig:<ip>:<port>:<sig_id>@<vhost>`), żeby dwa vhosty na jednym porcie miały różne identyfikatory.
   - `endpoints[].protocol`: schemat URL dla typowych portów WWW (80/8000/8008/8080/8888 `http`, 443/8443/9443 `https`), w pozostałych przypadkach `tcp`/`udp`.
   - **Tytuły deterministyczne** (bez czasu i numeru przebiegu): DefectDojo deduplikuje po hashu z tytułu, severity i endpointów.
-  - Usługi mają `Info`, panele administracyjne i środowiska staging `Medium`.
+  - Usługi mają `Info`, panele administracyjne i środowiska staging `Medium`. Sygnatura może nadpisać poziom polem `severity` (zapisywanym w dowodzie detekcji), np. `High` dla dashboardu Traefika z `api.insecure`, API Toxiproxy, DVWA i Redisa bez hasła, `Medium` dla PostgreSQL/MySQL dostępnych z sieci, `Low` dla FTP i httpbin. Wersja starsza niż `outdated.below` (WordPress < 6.0, vsftpd < 3.0, MySQL < 8.0) podnosi poziom do `High`, a tytuł brzmi `Outdated software detected: <nazwa> <wersja>`.
 - **Wzorzec labu** `lab/expected/runN.json` i wynik `asi verify` z precision/recall dla hostów, usług, detekcji i zmian:
   `{"run_id","prev_run_id","expected","duration_ms","hosts":{…},"services":{…},"detections":{…},"changes":{…},"min_score","pass","failures"}`,
   gdzie każda metryka to `{"expected","found","tp","fp","fn","precision","recall","recall_top1000","missing","unexpected"}`.

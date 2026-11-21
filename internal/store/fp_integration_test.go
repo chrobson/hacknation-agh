@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func TestFPStoreIntegration(t *testing.T) {
 		Cookies:     []model.Cookie{{Name: "sid", Secure: true}},
 		Redirects:   []model.Redirect{{URL: "http://10.20.1.5/", Status: 301}},
 		TLS:         &model.TLSInfo{Subject: "CN=x", SelfSigned: true, NotAfter: time.Unix(1700000000, 0).UTC(), SANs: []string{}},
-		FaviconMMH3: &fav, BodySHA256: "ab", Body: []byte("never stored"),
+		FaviconMMH3: &fav, BodySHA256: "ab", Body: []byte("never stored"), ResponseMS: 640,
 	}
 	if err := store.SaveHTTPObs(ctx, tx, obs); err != nil {
 		t.Fatal(err)
@@ -66,8 +67,17 @@ func TestFPStoreIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Title != "Panel 2" || got.Body != nil || *got.FaviconMMH3 != fav || !got.TLS.SelfSigned ||
-		got.Cookies[0].Name != "sid" || got.Redirects[0].Status != 301 || got.Headers["Server"][0] != "nginx" {
+		got.Cookies[0].Name != "sid" || got.Redirects[0].Status != 301 || got.Headers["Server"][0] != "nginx" ||
+		got.ResponseMS != 640 {
 		t.Fatalf("got %+v", got)
+	}
+	obs.ResponseMS = 0 // not measured: stored as NULL
+	if err := store.SaveHTTPObs(ctx, tx, obs); err != nil {
+		t.Fatal(err)
+	}
+	var nullMS bool
+	if err := tx.QueryRow(ctx, `SELECT response_ms IS NULL FROM http_obs WHERE service_id = $1`, svcID).Scan(&nullMS); err != nil || !nullMS {
+		t.Fatalf("response_ms not NULL: %v %v", nullMS, err)
 	}
 
 	ds := []model.Detection{{SignatureID: "nginx", Name: "nginx", Category: "server", Confidence: 85, Evidence: map[string]string{"version": "1.25"}}}
@@ -128,9 +138,8 @@ func TestFPStoreIntegration(t *testing.T) {
 	for _, s := range enabled {
 		ids = append(ids, s.ID)
 	}
-	joined := strings.Join(ids, ",")
-	if strings.Contains(joined, "nginx") || !strings.Contains(joined, "zz-custom") || !strings.Contains(joined, "wordpress") {
-		t.Fatalf("enabled = %s", joined)
+	if slices.Contains(ids, "nginx") || !slices.Contains(ids, "zz-custom") || !slices.Contains(ids, "wordpress") {
+		t.Fatalf("enabled = %s", strings.Join(ids, ","))
 	}
 	if err := dbs.Delete(ctx, "zz-custom"); err != nil {
 		t.Fatal(err)

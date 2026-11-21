@@ -1,0 +1,12 @@
+id: rabbitmq-amqp
+name: Broker AMQP (RabbitMQ)
+category: server
+confidence: 85
+severity: low
+description: Port AMQP brokera RabbitMQ rozpoznany przez nmap (produkt RabbitMQ, usługa amqp).
+condition: or
+matchers:
+  - type: service
+    product: '(?i)RabbitMQ(?: (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?))?'
+  - type: service
+    banner: '^amqp'

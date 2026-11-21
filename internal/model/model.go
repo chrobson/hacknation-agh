@@ -99,7 +99,10 @@ type HTTPObs struct {
 	TLS         *TLSInfo
 	FaviconMMH3 *int32
 	BodySHA256  string
-	Body        []byte // capped, in memory only for signature matching; never persisted
+	// ResponseMS is the duration of the first request to the service in
+	// milliseconds (connect, TLS, headers and body); 0 = not measured.
+	ResponseMS int
+	Body       []byte // capped, in memory only for signature matching; never persisted
 }
 
 // Detection is a signature match on a service.

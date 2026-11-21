@@ -1,0 +1,13 @@
+id: redis-noauth
+name: Redis bez uwierzytelnienia
+category: server
+confidence: 85
+severity: high
+description: Redis odpowiedział na sondę nmapa (INFO) pełną wersją, czyli bez hasła i bez protected mode. Wniosek wyłącznie z banera; ASI nie wysyła do Redisa żadnych poleceń zapisu.
+condition: and
+matchers:
+  - type: service
+    product: '(?i)^Redis key-value store (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+  - type: service
+    negate: true
+    banner: '(?i)auth|protected|denied'

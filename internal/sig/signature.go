@@ -27,6 +27,10 @@ const (
 	maxHeaders   = 4
 )
 
+// Severities accepted in Signature.Severity and Outdated.Severity
+// (DefectDojo levels, written in lower case in YAML).
+var Severities = []string{"info", "low", "medium", "high", "critical"}
+
 // Categories accepted in Signature.Category.
 var Categories = []string{"cms", "framework", "server", "iot", "admin-panel", "staging", "other"}
 
@@ -49,21 +53,42 @@ var MatcherTypes = []string{TypeHeader, TypeCookie, TypeTitle, TypeBody, TypeFav
 
 // Signature is one detection rule loaded from YAML.
 type Signature struct {
-	ID          string        `yaml:"id"`
-	Name        string        `yaml:"name"`
-	Category    string        `yaml:"category"`
-	Confidence  int           `yaml:"confidence"`
-	Description string        `yaml:"description,omitempty"`
-	Condition   string        `yaml:"condition,omitempty"` // or (default) | and
-	Matchers    []MatcherSpec `yaml:"matchers"`
+	ID          string `yaml:"id"`
+	Name        string `yaml:"name"`
+	Category    string `yaml:"category"`
+	Confidence  int    `yaml:"confidence"`
+	Description string `yaml:"description,omitempty"`
+	Condition   string `yaml:"condition,omitempty"` // or (default) | and
+	// Severity overrides the category default in exports (info|low|medium|
+	// high|critical), e.g. high for an unauthenticated management API.
+	Severity string `yaml:"severity,omitempty"`
+	// Outdated raises the severity when the detected version (a named
+	// "version" regex group) is older than Below. With "or", matching goes
+	// on after the first hit until some matcher yields a version.
+	Outdated *OutdatedRule `yaml:"outdated,omitempty"`
+	Matchers []MatcherSpec `yaml:"matchers"`
 
 	// Raw is the source YAML (stored in the signatures table).
 	Raw string `yaml:"-"`
 }
 
+// OutdatedRule flags versions older than Below (dotted numbers, e.g. "6.0").
+type OutdatedRule struct {
+	Below    string `yaml:"below"`
+	Severity string `yaml:"severity"`
+}
+
 // MatcherSpec is one matcher. Which fields apply depends on Type.
 type MatcherSpec struct {
 	Type string `yaml:"type"`
+	// Negate inverts a service, header, title or body matcher (e.g. "the
+	// nmap extra info does not mention authentication"). A negated HTTP
+	// matcher never matches a service without an HTTP response.
+	Negate bool `yaml:"negate,omitempty"`
+	// VersionOnly marks a matcher that never establishes a match by itself:
+	// it runs only after the signature matched ("or"), to read a version
+	// (e.g. a /readme.html probe sent to WordPress sites only).
+	VersionOnly bool `yaml:"version_only,omitempty"`
 
 	// header: Name + optional Regex (presence only if empty).
 	// cookie: Name (exact, case-insensitive) or Regex over cookie names.
@@ -168,6 +193,17 @@ func (s *Signature) Validate() error {
 	default:
 		add("condition must be or|and")
 	}
+	if s.Severity != "" && !contains(Severities, s.Severity) {
+		add("severity must be one of %s", strings.Join(Severities, "|"))
+	}
+	if o := s.Outdated; o != nil {
+		if _, ok := parseVersion(o.Below); !ok {
+			add("outdated.below must be a dotted version such as 6.0")
+		}
+		if !contains(Severities, o.Severity) {
+			add("outdated.severity must be one of %s", strings.Join(Severities, "|"))
+		}
+	}
 	if len(s.Matchers) == 0 {
 		add("at least one matcher is required")
 	}
@@ -175,15 +211,32 @@ func (s *Signature) Validate() error {
 		add("too many matchers (max %d)", MaxMatchers)
 	}
 	paths := map[string]bool{}
+	establishing := 0
 	for i := range s.Matchers {
 		m := &s.Matchers[i]
 		pre := fmt.Sprintf("matcher %d (%s)", i+1, m.Type)
 		for _, e := range m.validate() {
 			add("%s: %s", pre, e)
 		}
+		if !m.VersionOnly {
+			establishing++
+		} else {
+			if s.Condition == "and" {
+				add("%s: version_only requires condition or", pre)
+			}
+			if m.Negate {
+				add("%s: version_only cannot be negated", pre)
+			}
+			if !m.hasVersionGroup() {
+				add("%s: version_only needs a regex with a named group (?P<version>...)", pre)
+			}
+		}
 		if m.Type == TypePath {
 			paths[m.Path] = true
 		}
+	}
+	if len(s.Matchers) > 0 && establishing == 0 {
+		add("at least one matcher must not be version_only")
 	}
 	if len(paths) > MaxPaths {
 		add("too many extra paths: %d (max %d)", len(paths), MaxPaths)
@@ -310,6 +363,13 @@ func (m *MatcherSpec) validate() []string {
 	if m.Type != TypeTLS && (m.Expired || m.SelfSigned || m.Mismatch) {
 		add("expired/self_signed/hostname_mismatch only allowed on type tls")
 	}
+	if m.Negate {
+		switch m.Type {
+		case TypeService, TypeHeader, TypeTitle, TypeBody:
+		default:
+			add("negate only allowed on types service, header, title and body")
+		}
+	}
 	if m.Type != TypeFavicon && len(m.Hashes) > 0 {
 		add("hashes only allowed on type favicon")
 	}
@@ -423,3 +483,64 @@ func LoadFS(fsys fs.FS) ([]*Signature, error) {
 
 // LoadDir loads signatures from a directory on disk.
 func LoadDir(dir string) ([]*Signature, error) { return LoadFS(os.DirFS(dir)) }
+
+// parseVersion splits a dotted version ("4.7", "6.4.2", "2.0.18-beta") into
+// its leading numeric parts.
+func parseVersion(v string) ([]int, bool) {
+	var out []int
+	for _, part := range strings.Split(strings.TrimSpace(v), ".") {
+		n, digits := 0, 0
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				break
+			}
+			n = n*10 + int(r-'0')
+			digits++
+			if digits > 9 {
+				return nil, false
+			}
+		}
+		if digits == 0 {
+			break
+		}
+		out = append(out, n)
+		if digits != len(part) {
+			break // "18-beta": keep 18, ignore the suffix and later parts
+		}
+	}
+	return out, len(out) > 0
+}
+
+// CompareVersions compares two dotted versions numerically (missing parts
+// count as 0). ok is false when either is not a version.
+func CompareVersions(a, b string) (cmp int, ok bool) {
+	va, okA := parseVersion(a)
+	vb, okB := parseVersion(b)
+	if !okA || !okB {
+		return 0, false
+	}
+	for i := 0; i < max(len(va), len(vb)); i++ {
+		x, y := 0, 0
+		if i < len(va) {
+			x = va[i]
+		}
+		if i < len(vb) {
+			y = vb[i]
+		}
+		if x != y {
+			if x < y {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
+}
+
+// DojoSeverity maps a YAML severity to the DefectDojo spelling ("high" -> "High").
+func DojoSeverity(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}

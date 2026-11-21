@@ -12,12 +12,14 @@ func TestBuiltinSignaturesLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sigs) < 20 || len(sigs) > 40 {
-		t.Fatalf("got %d built-in signatures, want 20-40", len(sigs))
+	if len(sigs) < 20 || len(sigs) > 60 {
+		t.Fatalf("got %d built-in signatures, want 20-60", len(sigs))
 	}
 	required := []string{"wordpress", "joomla", "drupal", "nginx", "apache-httpd", "iis", "tomcat", "tomcat-manager",
 		"jenkins", "grafana", "gitlab", "phpmyadmin", "kibana", "admin-panel", "login-page", "spring-boot-actuator",
-		"apache-server-status", "staging-env", "mosquitto-mqtt", "iot-webui", "tls-self-signed", "tls-expired"}
+		"apache-server-status", "staging-env", "mosquitto-mqtt", "iot-webui", "tls-self-signed", "tls-expired",
+		"adminer", "gitea", "dvwa", "nginx-proxy-manager", "traefik-dashboard", "toxiproxy-api", "rabbitmq-management",
+		"rabbitmq-amqp", "httpbin", "redis", "redis-noauth", "ftp", "vsftpd", "postgresql", "mysql"}
 	ids := map[string]*Signature{}
 	for _, s := range sigs {
 		ids[s.ID] = s

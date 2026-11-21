@@ -1,0 +1,14 @@
+id: nginx-proxy-manager
+name: Nginx Proxy Manager (panel)
+category: admin-panel
+confidence: 90
+description: Panel administracyjny Nginx Proxy Manager (zwykle port 81). Wersja główna z API /api/ (odpowiedź statusu bez uwierzytelnienia, odpytywana tylko po rozpoznaniu panelu). Domyślne konto instalacji jest publicznie znane, więc panel nie powinien być dostępny z sieci.
+condition: or
+matchers:
+  - type: title
+    regex: '^Nginx Proxy Manager$'
+  - type: path
+    path: /api/
+    status: [200]
+    version_only: true
+    regex: '"status"\s*:\s*"OK"\s*,\s*"version"\s*:\s*\{\s*"major"\s*:\s*(?P<version>[0-9]+)'

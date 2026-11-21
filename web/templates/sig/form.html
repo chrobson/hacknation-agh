@@ -24,6 +24,8 @@
       <li><code>path</code>: path, method (GET/HEAD), status, regex, header, header_regex</li>
       <li><code>tls</code>: expired / self_signed / hostname_mismatch · <code>service</code>: product, banner, ports</li>
       <li>Grupa nazwana <code>(?P&lt;version&gt;…)</code> w wyrażeniu zapisuje wersję w dowodzie.</li>
+      <li><code>severity</code>: info | low | medium | high | critical (poziom w eksporcie DefectDojo; domyślnie wg kategorii) · <code>outdated</code>: below (np. 6.0), severity: wyższy poziom dla starszej wersji</li>
+      <li><code>negate: true</code> (service, header, title, body): dopasowanie, gdy wzorzec <em>nie</em> występuje · <code>version_only: true</code>: dopasowanie tylko odczytuje wersję po trafieniu sygnatury (np. ścieżka /readme.html)</li>
     </ul>
   </details>
 </section>

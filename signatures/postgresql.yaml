@@ -1,0 +1,12 @@
+id: postgresql
+name: PostgreSQL dostępny z sieci
+category: server
+confidence: 90
+severity: medium
+description: Serwer PostgreSQL przyjmuje połączenia z sieci (produkt lub nazwa usługi z nmapa). Bazy danych nie powinny być wystawione poza sieć aplikacji.
+condition: or
+matchers:
+  - type: service
+    product: '(?i)PostgreSQL(?: DB)?(?: (?P<version>[0-9]+(?:\.[0-9]+)*))?'
+  - type: service
+    banner: '^postgresql'

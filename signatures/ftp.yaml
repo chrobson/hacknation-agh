@@ -1,0 +1,12 @@
+id: ftp
+name: Serwer FTP
+category: server
+confidence: 85
+severity: low
+description: Usługa FTP rozpoznana przez nmap (nazwa usługi lub produkt). FTP przesyła hasła jawnym tekstem. ASI nie próbuje logowania (również anonimowego).
+condition: or
+matchers:
+  - type: service
+    banner: '^(?:ssl/)?ftp\b'
+  - type: service
+    product: '(?i)\b(?:vsftpd|ProFTPD|Pure-FTPd|FileZilla ftpd)\b'

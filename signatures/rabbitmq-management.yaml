@@ -1,0 +1,11 @@
+id: rabbitmq-management
+name: RabbitMQ Management
+category: admin-panel
+confidence: 90
+description: Panel zarządzania brokerem RabbitMQ (rabbitmq_management, typowo port 15672). Wykrycie po tytule strony i skryptach interfejsu, bez prób logowania.
+condition: or
+matchers:
+  - type: title
+    regex: '^RabbitMQ Management$'
+  - type: body
+    regex: '(?is)<script[^>]+src="js/ejs-1\.0\.min\.js".*<script[^>]+src="js/main\.js"'

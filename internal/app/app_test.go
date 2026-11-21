@@ -83,6 +83,7 @@ func TestPagesRender(t *testing.T) {
 	every := 60
 	ws, we := 22*time.Hour, 6*time.Hour
 	status := 200
+	respMS := 1108
 	pages := map[string]any{
 		"dashboard": Dashboard{RunID: 3, LatestRun: &run, ActiveRuns: []RunRow{{ID: 4, Status: "running", ChunksTotal: 10, ChunksDone: 3, StartedAt: &now}},
 			ByCategory: []KV{{"admin-panel", 2}}, Notable: []Finding{{ServiceID: 1, IP: "10.20.9.110", Port: 80, Proto: "tcp", Name: "Panel", Category: "admin-panel"}},
@@ -93,14 +94,16 @@ func TestPagesRender(t *testing.T) {
 		"scan_form": scanFormData{New: false, Config: store.ScanConfig{ID: 1, Name: "lab", TargetIDs: []int64{2}, WindowStart: &ws, WindowEnd: &we},
 			Targets: []model.Target{{ID: 2, Value: "10.20.0.0/18", Tags: []string{"lab"}}}},
 		"results": resultsData{Run: &run, Runs: []RunRow{run}, Filter: ResultFilter{RunID: 3}, Categories: []string{"cms"},
-			Services: []ServiceRow{{ID: 1, IP: "10.20.0.10", Port: 80, Proto: "tcp", Banner: "http", Status: &status, Title: "x",
-				Detections: []DetectionTag{{Signature: "nginx", Name: "nginx", Category: "server", Confidence: 85}}}}},
+			Services: []ServiceRow{{ID: 1, IP: "10.20.0.10", Port: 80, Proto: "tcp", Banner: "http", Status: &status, Title: "x", ResponseMS: &respMS,
+				Detections: []DetectionTag{{Signature: "nginx", Name: "nginx", Category: "server", Confidence: 85},
+					{Signature: "wordpress", Name: "WordPress", Category: "cms", Confidence: 90, Severity: "High"}}}}},
 		"service": serviceData{Service: ServiceDetail{ServiceRow: ServiceRow{ID: 1, IP: "10.20.0.11", Port: 443, Proto: "tcp"}, RunID: 3},
-			HTTP: &model.HTTPObs{URL: "https://10.20.0.11/", Status: 200, Headers: map[string][]string{"Server": {"nginx"}},
+			HTTP: &model.HTTPObs{URL: "https://10.20.0.11/", Status: 200, ResponseMS: 1108, Headers: map[string][]string{"Server": {"nginx"}},
 				Cookies: []model.Cookie{{Name: "s"}}, Redirects: []model.Redirect{{URL: "https://x/", Status: 301}},
 				TLS: &model.TLSInfo{Subject: "CN=secure.lab.local", SelfSigned: true}},
-			Detections: []model.Detection{{SignatureID: "tls-self-signed", Name: "TLS", Category: "other", Evidence: map[string]string{"tls": "self-signed"}}},
-			Legacy:     &httpfp.LegacyTLS{TLS10: true}},
+			Detections: []model.Detection{{SignatureID: "tls-self-signed", Name: "TLS", Category: "other", Evidence: map[string]string{"tls": "self-signed"}},
+				{SignatureID: "wordpress", Name: "WordPress", Category: "cms", Evidence: map[string]string{"version": "4.7", "outdated": "version 4.7 < 6.0", "severity": "High"}}},
+			Legacy: &httpfp.LegacyTLS{TLS10: true}},
 	}
 	for name, data := range pages {
 		r := httptest.NewRequest("GET", "/", nil)
@@ -112,6 +115,9 @@ func TestPagesRender(t *testing.T) {
 		}
 		if !strings.Contains(w.Body.String(), `hx-get="/nav"`) {
 			t.Errorf("%s: shared nav missing", name)
+		}
+		if (name == "results" || name == "service") && (!strings.Contains(w.Body.String(), "1108 ms") || !strings.Contains(w.Body.String(), "sev-High")) {
+			t.Errorf("%s: response time or severity missing", name)
 		}
 	}
 	// nav hides items the user may not use
