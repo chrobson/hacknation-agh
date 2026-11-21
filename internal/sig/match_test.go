@@ -299,7 +299,7 @@ func TestHTTPFetcherWithProber(t *testing.T) {
 			t.Errorf("non GET/HEAD request %q", r)
 		}
 	}
-	if len(seen) > 1+8 {
+	if len(seen) > 1+9 {
 		t.Errorf("too many requests: %d %v", len(seen), seen)
 	}
 }

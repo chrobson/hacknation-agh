@@ -72,6 +72,7 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	sc := scan.NewNmap(cfg.NmapPath, c.Allow, cfg.ScanExclude...)
 	c.Runner = runner.New(store.NewScanStore(d.DB), sc, c.Allow, cfg.ScanPrivileged, d.Log)
 	c.Runner.OnDone = c.Pipeline.OnDone
+	c.Runner.ExtraPorts = scan.DefaultExtraPorts
 
 	// Imports (nmap XML, Generic Findings) are compared like scan runs.
 	export.AfterImport = func(ctx context.Context, _ *pgxpool.Pool, runID int64) error {

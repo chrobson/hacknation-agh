@@ -60,7 +60,7 @@ var DetectionAliases = map[string][]string{
 	"login-panel":     {"login-page"},
 	"mqtt-anonymous":  {"mosquitto-mqtt"},
 	"ip-camera":       {"iot-webui", "ip-camera"},
-	"router-login":    {"iot-webui", "router-login", "login-page"},
+	"router-login":    {"iot-webui", "router-login"},
 	"tomcat":          {"tomcat"},
 	"tomcat-manager":  {"tomcat-manager"},
 	"haproxy-stats":   {"haproxy-stats"},

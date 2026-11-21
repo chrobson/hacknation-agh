@@ -55,6 +55,7 @@ type Runner struct {
 	Now         func() time.Time
 	MaxAttempts int
 	ChunkBits4  int
+	ExtraPorts  []int // second phase-2 pass (scan.Opts.ExtraPorts)
 	// OnDone, if set, is called after a run is marked done (all chunks
 	// finished), e.g. HTTP fingerprinting then diff.ApplyRun. Its error is
 	// logged and returned by Execute.
@@ -198,7 +199,7 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 		r.log().Warn("cannot load targets for hostnames", "run", runID, "err", err)
 	}
 	k := max(cfg.Workers, 1)
-	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(cfg.MaxRate, k), Privileged: r.Privileged}
+	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(cfg.MaxRate, k), Privileged: r.Privileged, ExtraPorts: r.ExtraPorts}
 	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", opts.MaxRate)
 
 	var wg sync.WaitGroup

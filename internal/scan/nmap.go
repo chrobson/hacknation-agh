@@ -96,9 +96,23 @@ func (n *Nmap) Services(ctx context.Context, hosts []netip.Addr, o Opts) ([]mode
 		if err != nil {
 			return nil, err
 		}
+		seen := map[model.AssetKey]bool{}
 		for _, s := range res.Services {
 			if want[s.Key.IP] {
 				out = append(out, s)
+				seen[s.Key] = true
+			}
+		}
+		if len(o.ExtraPorts) > 0 {
+			res, err := n.run(ctx, ExtraServiceArgs(group, o))
+			if err != nil {
+				return nil, err
+			}
+			for _, s := range res.Services {
+				if want[s.Key.IP] && !seen[s.Key] {
+					out = append(out, s)
+					seen[s.Key] = true
+				}
 			}
 		}
 	}
@@ -153,6 +167,24 @@ func ServiceArgs(hosts []netip.Addr, o Opts) []string {
 		"--top-ports", strconv.Itoa(top),
 		"-sV", "--version-light", "--open",
 	}
+	args = appendRate(args, o.MaxRate)
+	if len(hosts) > 0 && hosts[0].Unmap().Is6() {
+		args = append(args, "-6")
+	}
+	args = append(args, "-oX", "-")
+	for _, h := range hosts {
+		args = append(args, h.Unmap().String())
+	}
+	return args
+}
+
+// ExtraServiceArgs builds the second phase-2 pass over o.ExtraPorts.
+func ExtraServiceArgs(hosts []netip.Addr, o Opts) []string {
+	scanType := "-sT"
+	if o.Privileged {
+		scanType = "-sS"
+	}
+	args := []string{scanType, "-Pn", "-n", "-p", portList(o.ExtraPorts), "-sV", "--version-light", "--open"}
 	args = appendRate(args, o.MaxRate)
 	if len(hosts) > 0 && hosts[0].Unmap().Is6() {
 		args = append(args, "-6")

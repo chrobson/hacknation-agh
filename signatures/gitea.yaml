@@ -1,0 +1,11 @@
+id: gitea
+name: Gitea
+category: other
+confidence: 90
+description: Serwis Git Gitea (ciasteczko i_like_gitea, stopka „Powered by Gitea”).
+condition: or
+matchers:
+  - type: cookie
+    regex: '^i_like_gitea$'
+  - type: body
+    regex: '(?i)Powered by Gitea|content="Gitea'

@@ -1,0 +1,9 @@
+id: nats-monitoring
+name: Monitoring NATS
+category: admin-panel
+confidence: 85
+description: Endpoint monitoringu serwera NATS (port 8222, strona z odnośnikami /varz, /connz).
+condition: or
+matchers:
+  - type: body
+    regex: '(?i)nats\.io|href="?/?varz'

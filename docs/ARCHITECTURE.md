@@ -14,6 +14,8 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
 | `internal/auth` | sesje, bcrypt, RBAC (`Require(perm)` → 403), CSRF: `http.CrossOriginProtection` + `SameSite=Lax`, AES-GCM dla tabeli `secrets` | |
 | `internal/dojo`, `internal/export` | DefectDojo Generic Findings JSON (eksport i import), CSV, import XML nmapa | `dojo.Codec` |
 | `internal/web` | routing chi; każdy moduł udostępnia `Mount(r, Deps)`; szablony dziedziczą z `web/templates/base.html` | `web.Mounter` |
+| `internal/app` | integracja: potok po skanie (fingerprinting HTTP/TLS → sygnatury → `diff.ApplyRun`), router ze wszystkimi modułami, pulpit, strony skanów i wyników, `asi verify` | |
+| `web/` (`webassets`) | szablony i pliki statyczne osadzone w binarium (`Templates`, `Static`); wspólna nawigacja ładowana z `/nav` i filtrowana uprawnieniami | |
 | `internal/db`, `migrations/` | pula pgx, migracje osadzone (`embed`) zapisywane w `schema_migrations` | |
 
 ## Kontrakt danych
@@ -40,7 +42,17 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
   - `endpoints[].protocol`: schemat URL dla typowych portów WWW (80/8000/8008/8080/8888 `http`, 443/8443/9443 `https`), w pozostałych przypadkach `tcp`/`udp`.
   - **Tytuły deterministyczne** (bez czasu i numeru przebiegu): DefectDojo deduplikuje po hashu z tytułu, severity i endpointów.
   - Usługi mają `Info`, panele administracyjne i środowiska staging `Medium`.
-- **Wzorzec labu** `lab/expected/runN.json` i wynik `asi verify` z precision/recall dla hostów, usług, detekcji i zmian.
+- **Wzorzec labu** `lab/expected/runN.json` i wynik `asi verify` z precision/recall dla hostów, usług, detekcji i zmian:
+  `{"run_id","prev_run_id","expected","duration_ms","hosts":{…},"services":{…},"detections":{…},"changes":{…},"min_score","pass","failures"}`,
+  gdzie każda metryka to `{"expected","found","tp","fp","fn","precision","recall","recall_top1000","missing","unexpected"}`.
+  `recall_top1000` pomija pozycje na portach spoza top 1000 nmapa. Adresy infrastruktury z `infra` są ignorowane, a nazwy detekcji z wzorca są mapowane na identyfikatory sygnatur (`staging-vhost` → `staging-env`, `login-panel` → `login-page`, `mqtt-anonymous` → `mosquitto-mqtt`, `ip-camera`/`router-login` → `iot-webui`). Detekcje sygnatur spoza słownika labu nie wpływają na precision. `pass` wymaga precision i recall hostów, precision usług, `services.recall_top1000` oraz (od drugiego przebiegu) `changes.recall_top1000` ≥ `-min`.
+
+## Przepływ skanu
+
+1. Cele (IP, CIDR, domeny) → allowlista → podział na chunki (domyślnie /24) w kolejce `scan_chunks`.
+2. K wątków pobiera chunki (`FOR UPDATE SKIP LOCKED`), każdy z tempem `max_rate/K`: `nmap -sn` (ARP/ICMP/TCP ping), potem `-sS|-sT --top-ports N -sV --version-light` na aktywnych hostach i drugi przebieg po portach spoza top 1000 (MQTT, Redis, Memcached, NATS, MongoDB…). Koniec okna przerywa chunk i zwraca go do kolejki.
+3. Po zakończeniu przebiegu: sondowanie HTTP/HTTPS każdej usługi webowej (także jako vhost dla domen z listy celów), dopasowanie sygnatur, zapis `http_obs`/`detections`, porównanie z poprzednim przebiegiem (`changes`, `host_state`).
+4. Import XML nmapa lub Generic Findings tworzy przebieg `import`, który też jest porównywany.
 
 ## Bezpieczeństwo
 

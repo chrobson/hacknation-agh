@@ -185,3 +185,12 @@ func TestMixedFamiliesRunSeparately(t *testing.T) {
 		t.Errorf("services calls: %v", fe.calls)
 	}
 }
+
+func TestExtraServiceArgs(t *testing.T) {
+	hosts := []netip.Addr{netip.MustParseAddr("10.20.8.100")}
+	got := strings.Join(ExtraServiceArgs(hosts, Opts{Privileged: true, MaxRate: 100, ExtraPorts: []int{1883, 6379}}), " ")
+	want := "-sS -Pn -n -p 1883,6379 -sV --version-light --open --max-rate 100 -oX - 10.20.8.100"
+	if got != want {
+		t.Fatalf("args = %q, want %q", got, want)
+	}
+}

@@ -12,8 +12,8 @@ func TestBuiltinSignaturesLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sigs) < 20 || len(sigs) > 25 {
-		t.Fatalf("got %d built-in signatures, want 20-25", len(sigs))
+	if len(sigs) < 20 || len(sigs) > 40 {
+		t.Fatalf("got %d built-in signatures, want 20-40", len(sigs))
 	}
 	required := []string{"wordpress", "joomla", "drupal", "nginx", "apache-httpd", "iis", "tomcat", "tomcat-manager",
 		"jenkins", "grafana", "gitlab", "phpmyadmin", "kibana", "admin-panel", "login-page", "spring-boot-actuator",

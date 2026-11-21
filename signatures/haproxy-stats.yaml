@@ -1,0 +1,13 @@
+id: haproxy-stats
+name: Statystyki HAProxy
+category: admin-panel
+confidence: 90
+description: Publicznie dostępna strona statystyk HAProxy (/haproxy?stats), ujawnia backendy i ich stan.
+condition: or
+matchers:
+  - type: title
+    regex: '(?i)Statistics Report for HAProxy'
+  - type: path
+    path: /haproxy?stats
+    status: [200]
+    regex: '(?i)Statistics Report for HAProxy(?:.*?version (?P<version>[0-9][0-9.]*))?'
