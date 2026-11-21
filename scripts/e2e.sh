@@ -56,6 +56,12 @@ agh_template() {
   mkdir -p "$out"
   [ -f .env ] || ./scripts/gen-env.sh
   set -a; . ./.env; set +a
+  if [ "$target" = localhost ] && [ -n "${ASI_ALLOWED_CIDRS:-}" ]; then
+    case ",${ASI_ALLOWED_CIDRS// /}," in
+      *,127.0.0.0/8,*) ;;
+      *) fail ".env sets ASI_ALLOWED_CIDRS without 127.0.0.0/8 (and ::1/128): localhost would be rejected" ;;
+    esac
+  fi
   psql_db() { "${DC[@]}" exec -T db psql -U "${ASI_DB_USER:-asi}" -d asi -tAX -v ON_ERROR_STOP=1 -c "$1"; }
   if [ "$amode" = native ]; then
     command -v nmap >/dev/null || fail "native mode needs nmap on this host"

@@ -35,7 +35,7 @@ make e2e-agh             # szablon AGH na localhost: znikająca i powracająca u
 
 ## Skanowanie usług na tym hoście (localhost)
 
-Usługi opublikowane przez Dockera na hoście (`ports: "8787:80"`) są widoczne pod `127.0.0.1` hosta. Domyślna allowlista obejmuje `127.0.0.0/8` i `::1`, więc cel `localhost` (lub `127.0.0.1`) przechodzi import. Aplikacja w zwykłym kontenerze widzi jednak tylko własny loopback, dlatego są trzy tryby:
+Usługi opublikowane przez Dockera na hoście (`ports: "8787:80"`) są widoczne pod `127.0.0.1` hosta. Domyślna allowlista obejmuje `127.0.0.0/8` i `::1`, więc cel `localhost` (lub `127.0.0.1`) przechodzi import. Jawne `ASI_ALLOWED_CIDRS` w `.env` zastępuje domyślną listę, więc `.env` z wcześniejszej wersji musi dostać `127.0.0.0/8,::1/128` (jak w `.env.example`). Aplikacja w zwykłym kontenerze widzi jednak tylko własny loopback, dlatego są trzy tryby:
 
 | Tryb | Uruchomienie | Cel do dodania | Kiedy |
 |---|---|---|---|
