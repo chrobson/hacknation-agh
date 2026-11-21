@@ -18,8 +18,8 @@ func TestAllowlist(t *testing.T) {
 		{"10.20.0.0/18", true},
 		{"10.20.5.0/24", true},
 		{"10.20.63.255/32", true},
-		{"10.20.64.0/24", false},  // just outside the /18
-		{"10.0.0.0/8", false},     // wider than the allowed prefix
+		{"10.20.64.0/24", false}, // just outside the /18
+		{"10.0.0.0/8", false},    // wider than the allowed prefix
 		{"8.8.8.8/32", false},
 		{"192.0.2.10/32", true},
 	}

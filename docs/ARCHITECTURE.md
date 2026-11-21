@@ -36,7 +36,8 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
 
 - **Import celów**: CSV `value,tags` (tagi rozdzielone `;`) lub JSON `[{"value","tags":[]}]`. Raport: `{"imported","duplicates","errors":[{"line","value","error"}]}`.
 - **DefectDojo Generic Findings**: `{"findings":[{"title","severity","description","date","unique_id_from_tool","vuln_id_from_tool","endpoints":[{"host","port","protocol"}],"tags"}]}`.
-  - `unique_id_from_tool`: `asi:svc:<ip>:<port>/<proto>` lub `asi:sig:<ip>:<port>:<sig_id>`, unikalne w pliku.
+  - `unique_id_from_tool`: `asi:svc:<ip>:<port>/<proto>` lub `asi:sig:<ip>:<port>:<sig_id>`, unikalne w pliku. Gdy usługa ma wirtualny host, dochodzi sufiks `@<vhost>` (`asi:svc:<ip>:<port>/<proto>@<vhost>`, `asi:sig:<ip>:<port>:<sig_id>@<vhost>`), żeby dwa vhosty na jednym porcie miały różne identyfikatory.
+  - `endpoints[].protocol`: schemat URL dla typowych portów WWW (80/8000/8008/8080/8888 `http`, 443/8443/9443 `https`), w pozostałych przypadkach `tcp`/`udp`.
   - **Tytuły deterministyczne** (bez czasu i numeru przebiegu): DefectDojo deduplikuje po hashu z tytułu, severity i endpointów.
   - Usługi mają `Info`, panele administracyjne i środowiska staging `Medium`.
 - **Wzorzec labu** `lab/expected/runN.json` i wynik `asi verify` z precision/recall dla hostów, usług, detekcji i zmian.

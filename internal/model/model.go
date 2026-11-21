@@ -174,12 +174,12 @@ const (
 
 // Finding is the exchange unit for DefectDojo Generic Findings import/export.
 type Finding struct {
-	Title           string
-	Severity        Severity
-	Description     string
-	Date            time.Time
+	Title            string
+	Severity         Severity
+	Description      string
+	Date             time.Time
 	UniqueIDFromTool string // asi:svc:<ip>:<port>/<proto> | asi:sig:<ip>:<port>:<sig_id>
-	VulnIDFromTool  string // signature id, empty for plain services
-	Endpoints       []AssetKey
-	Tags            []string
+	VulnIDFromTool   string // signature id, empty for plain services
+	Endpoints        []AssetKey
+	Tags             []string
 }

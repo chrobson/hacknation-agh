@@ -13,16 +13,20 @@ import (
 // Config is the process configuration. All values come from the environment
 // (docker compose passes .env); defaults are safe for the local lab.
 type Config struct {
-	DatabaseURL  string         // ASI_DATABASE_URL
-	HTTPAddr     string         // ASI_HTTP_ADDR, default :8080
-	AllowedCIDRs []netip.Prefix // ASI_ALLOWED_CIDRS, comma separated; scanning outside is refused
-	SecretKey    []byte         // ASI_SECRET_KEY, 32 bytes hex, AES-GCM key for the secrets table
-	NmapPath     string         // ASI_NMAP_PATH, default "nmap"
-	ScanPrivileged bool         // ASI_SCAN_PRIVILEGED: use -sS instead of -sT
-	DojoURL      string         // ASI_DOJO_URL (empty = DefectDojo push disabled)
-	DojoPush     bool           // ASI_DOJO_PUSH, default false (demo instance is public)
-	Unstable     UnstableConfig
-	TickEvery    time.Duration  // ASI_TICK_EVERY, scheduler tick, default 1m
+	DatabaseURL    string         // ASI_DATABASE_URL
+	HTTPAddr       string         // ASI_HTTP_ADDR, default :8080
+	AllowedCIDRs   []netip.Prefix // ASI_ALLOWED_CIDRS, comma separated; scanning outside is refused
+	SecretKey      []byte         // ASI_SECRET_KEY, 32 bytes hex, AES-GCM key for the secrets table
+	NmapPath       string         // ASI_NMAP_PATH, default "nmap"
+	ScanPrivileged bool           // ASI_SCAN_PRIVILEGED: use -sS instead of -sT
+	DojoURL        string         // ASI_DOJO_URL (empty = DefectDojo push disabled)
+	DojoPush       bool           // ASI_DOJO_PUSH, default false (demo instance is public)
+	DojoToken      string         // ASI_DOJO_TOKEN, API v2 token (preferred over user/password)
+	DojoUser       string         // ASI_DOJO_USER, used to obtain a token when DojoToken is empty
+	DojoPassword   string         // ASI_DOJO_PASSWORD
+	ScanExclude    []netip.Addr   // ASI_SCAN_EXCLUDE, comma separated addresses never scanned
+	Unstable       UnstableConfig
+	TickEvery      time.Duration // ASI_TICK_EVERY, scheduler tick, default 1m
 }
 
 // UnstableConfig defines host instability across runs.
@@ -35,17 +39,27 @@ type UnstableConfig struct {
 // DefaultAllowedCIDRs covers the docker lab and RFC 5737 TEST-NET-1.
 const DefaultAllowedCIDRs = "10.20.0.0/18,192.0.2.0/24"
 
+// DefaultScanExclude lists lab infrastructure that answers ARP but is not a
+// target: the network address, the docker bridge gateway and the scanner.
+const DefaultScanExclude = "10.20.0.0,10.20.0.1,10.20.63.250"
+
 // Load reads the configuration from the environment.
 func Load() (Config, error) {
 	c := Config{
-		DatabaseURL: env("ASI_DATABASE_URL", "postgres://asi:asi@localhost:5432/asi?sslmode=disable"),
-		HTTPAddr:    env("ASI_HTTP_ADDR", ":8080"),
-		NmapPath:    env("ASI_NMAP_PATH", "nmap"),
-		DojoURL:     env("ASI_DOJO_URL", ""),
+		DatabaseURL:  env("ASI_DATABASE_URL", "postgres://asi:asi@localhost:5432/asi?sslmode=disable"),
+		HTTPAddr:     env("ASI_HTTP_ADDR", ":8080"),
+		NmapPath:     env("ASI_NMAP_PATH", "nmap"),
+		DojoURL:      env("ASI_DOJO_URL", ""),
+		DojoToken:    os.Getenv("ASI_DOJO_TOKEN"),
+		DojoUser:     os.Getenv("ASI_DOJO_USER"),
+		DojoPassword: os.Getenv("ASI_DOJO_PASSWORD"),
 	}
 	var err error
 	if c.AllowedCIDRs, err = ParsePrefixes(env("ASI_ALLOWED_CIDRS", DefaultAllowedCIDRs)); err != nil {
 		return c, fmt.Errorf("ASI_ALLOWED_CIDRS: %w", err)
+	}
+	if c.ScanExclude, err = ParseAddrs(env("ASI_SCAN_EXCLUDE", DefaultScanExclude)); err != nil {
+		return c, fmt.Errorf("ASI_SCAN_EXCLUDE: %w", err)
 	}
 	if c.ScanPrivileged, err = envBool("ASI_SCAN_PRIVILEGED", false); err != nil {
 		return c, err
@@ -94,6 +108,23 @@ func ParsePrefixes(s string) ([]netip.Prefix, error) {
 			return nil, err
 		}
 		out = append(out, p.Masked())
+	}
+	return out, nil
+}
+
+// ParseAddrs parses a comma separated list of IP addresses.
+func ParseAddrs(s string) ([]netip.Addr, error) {
+	var out []netip.Addr
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		a, err := netip.ParseAddr(part)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a.Unmap())
 	}
 	return out, nil
 }
