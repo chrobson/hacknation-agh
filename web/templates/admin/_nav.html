@@ -1,9 +1,2 @@
-{{define "authnav"}}{{with .User}}
-  <a href="/">Panel</a>
-  {{if can . "targets.read"}}<a href="/targets">Cele</a>{{end}}
-  {{if can . "results.read"}}<a href="/results">Wyniki</a>{{end}}
-  {{if can . "users.admin"}}<a href="/admin/users">Użytkownicy</a> <a href="/admin/roles">Role</a> <a href="/admin/audit">Dziennik zdarzeń</a>{{end}}
-  <span class="who">{{.Login}} ({{.RoleName}})</span>
-  <form method="post" action="/logout" class="inline"><button type="submit">Wyloguj</button></form>
-{{end}}{{end}}
+{{define "authnav"}}{{with .User}}{{if can . "users.admin"}}<a href="/admin/users">Użytkownicy</a> <a href="/admin/roles">Role</a> <a href="/admin/audit">Dziennik zdarzeń</a>{{end}}{{end}}{{end}}
 {{define "flash"}}{{if .Message}}<p class="flash ok" role="status">{{.Message}}</p>{{end}}{{if .Error}}<p class="flash err" role="alert">{{.Error}}</p>{{end}}{{end}}

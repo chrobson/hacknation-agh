@@ -1,0 +1,67 @@
+{{define "title"}}Usługa · Attack Surface Intelligence{{end}}
+{{define "content"}}{{with .Data}}{{with .Service}}
+<div class="page-head">
+  <h1>{{.IP}}:{{.Port}}/{{.Proto}}{{if .VHost}} ({{.VHost}}){{end}}</h1>
+  <a href="/results?run={{.RunID}}">← wyniki przebiegu #{{.RunID}}</a>
+</div>
+<section class="card">
+  <h2>Usługa</h2>
+  <dl>
+    <dt>Nazwa (nmap)</dt><dd>{{.Banner}}</dd>
+    <dt>Produkt</dt><dd>{{.Product}} {{.Version}}</dd>
+    {{if .ExtraInfo}}<dt>Dodatkowe</dt><dd>{{.ExtraInfo}}</dd>{{end}}
+    {{if .CPE}}<dt>CPE</dt><dd><code>{{.CPE}}</code></dd>{{end}}
+    {{if .Hostname}}<dt>Nazwa hosta</dt><dd>{{.Hostname}}</dd>{{end}}
+  </dl>
+</section>
+<section class="card">
+  <h2>Adnotacja analityka</h2>
+  <div hx-get="/annotations/cell?ip={{.IP}}&amp;port={{.Port}}&amp;proto={{.Proto}}&amp;vhost={{q .VHost}}&amp;return={{q $.Data.Return}}" hx-trigger="load"><span class="muted">wczytywanie…</span></div>
+  <p class="hint">Adnotacje są przypisane do klucza (IP, port, protokół, vhost) i zostają przy kolejnych skanach.</p>
+</section>
+{{end}}
+<section class="card">
+  <h2>Detekcje</h2>
+  {{if .Detections}}
+  <table>
+    <thead><tr><th>Sygnatura</th><th>Kategoria</th><th class="num">Pewność</th><th>Dowody</th></tr></thead>
+    <tbody>{{range .Detections}}
+      <tr><td><a href="/signatures/{{.SignatureID}}">{{.Name}}</a></td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td><td class="num">{{.Confidence}}%</td>
+          <td>{{range $k, $v := .Evidence}}<code>{{$k}}</code>: {{$v}}<br>{{end}}</td></tr>
+    {{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">Brak detekcji.</p>{{end}}
+</section>
+{{with .HTTP}}
+<section class="card">
+  <h2>HTTP / HTTPS</h2>
+  <dl>
+    <dt>URL</dt><dd><code>{{.URL}}</code></dd>
+    <dt>Kod odpowiedzi</dt><dd>{{.Status}}</dd>
+    <dt>Tytuł</dt><dd>{{.Title}}</dd>
+    {{with .FaviconMMH3}}<dt>Favicon (mmh3)</dt><dd><code>{{.}}</code></dd>{{end}}
+    {{if .BodySHA256}}<dt>SHA-256 treści</dt><dd><code>{{.BodySHA256}}</code></dd>{{end}}
+  </dl>
+  {{if .Redirects}}<h3>Przekierowania</h3><ol>{{range .Redirects}}<li>{{.Status}} → <code>{{.URL}}</code></li>{{end}}</ol>{{end}}
+  <h3>Nagłówki</h3>
+  {{if .Headers}}<table><tbody>{{range $k, $v := .Headers}}<tr><td><code>{{$k}}</code></td><td>{{range $v}}{{.}}<br>{{end}}</td></tr>{{end}}</tbody></table>{{else}}<p class="muted">brak</p>{{end}}
+  <h3>Ciasteczka</h3>
+  {{if .Cookies}}<table><thead><tr><th>Nazwa</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th></tr></thead><tbody>{{range .Cookies}}
+    <tr><td><code>{{.Name}}</code></td><td>{{if .Secure}}tak{{else}}<span class="bad">nie</span>{{end}}</td><td>{{if .HTTPOnly}}tak{{else}}<span class="bad">nie</span>{{end}}</td><td>{{.SameSite}}</td></tr>{{end}}</tbody></table>
+  {{else}}<p class="muted">brak</p>{{end}}
+  {{with .TLS}}
+  <h3>Certyfikat TLS</h3>
+  <dl>
+    <dt>Podmiot</dt><dd>{{.Subject}}</dd>
+    <dt>Wystawca</dt><dd>{{.Issuer}}</dd>
+    <dt>SAN</dt><dd>{{range .SANs}}<code>{{.}}</code> {{end}}</dd>
+    <dt>Ważny</dt><dd>{{fmtTime .NotBefore}} – {{fmtTime .NotAfter}}</dd>
+    <dt>Wersja TLS</dt><dd>{{.Version}}</dd>
+    <dt>Problemy</dt><dd>{{if .Expired}}<span class="bad">wygasły</span> {{end}}{{if .SelfSigned}}<span class="bad">samopodpisany</span> {{end}}{{if .Mismatch}}<span class="bad">niezgodna nazwa</span>{{end}}{{if not (or .Expired .SelfSigned .Mismatch)}}brak{{end}}</dd>
+  </dl>
+  {{end}}
+  {{with $.Data.Legacy}}<p>Przestarzałe protokoły: TLS 1.0 {{if .TLS10}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}, TLS 1.1 {{if .TLS11}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}.</p>{{end}}
+</section>
+{{end}}
+{{end}}{{end}}
+{{template "base" .}}

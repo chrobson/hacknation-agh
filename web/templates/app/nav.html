@@ -1,0 +1,3 @@
+{{define "app/nav"}}{{$cur := .Current}}{{range .Items}}<a href="{{.Href}}"{{if eq .Href $cur}} aria-current="page"{{end}}>{{.Label}}</a>
+{{end}}<span class="who">{{.User.Login}} ({{.User.RoleName}})</span>
+<form method="post" action="/logout" class="inline"><button type="submit" class="secondary">Wyloguj</button></form>{{end}}

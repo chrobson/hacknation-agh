@@ -1,0 +1,109 @@
+{{define "title"}}Pulpit · Attack Surface Intelligence{{end}}
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Pulpit</h1>
+  {{if .RunID}}<span class="muted">Dane z przebiegu <a href="/results?run={{.RunID}}">#{{.RunID}}</a></span>{{end}}
+</div>
+{{template "flash" $}}
+
+{{if .ActiveRuns}}
+<section class="card" {{if .ActiveRuns}}hx-get="/" hx-select="#active-runs" hx-target="#active-runs" hx-swap="outerHTML" hx-trigger="every 5s"{{end}}>
+<div id="active-runs">
+  <h2>Skany w toku</h2>
+  <table>
+    <thead><tr><th>Przebieg</th><th>Konfiguracja</th><th>Status</th><th>Postęp</th><th>Czas</th></tr></thead>
+    <tbody>{{range .ActiveRuns}}
+      <tr><td>#{{.ID}}</td><td>{{.ConfigName}}</td><td>{{template "runstatus" .}}</td><td>{{template "progress" .}}</td><td>{{.Duration}}</td></tr>
+    {{end}}</tbody>
+  </table>
+</div>
+</section>
+{{end}}
+
+<div class="tiles">
+  <a class="tile" href="/targets"><span class="num">{{.Targets}}</span><span class="label">celów ({{.TargetAddrs}} adresów)</span></a>
+  <a class="tile" href="/results"><span class="num">{{.LiveHosts}}</span><span class="label">aktywnych hostów</span></a>
+  <a class="tile" href="/results"><span class="num">{{.Services}}</span><span class="label">usług ({{.HTTPServices}} HTTP/HTTPS)</span></a>
+  <a class="tile" href="/results"><span class="num">{{.Detections}}</span><span class="label">detekcji sygnatur</span></a>
+  <a class="tile{{if .Notable}} warn{{end}}" href="/results?cat=admin-panel"><span class="num">{{len .Notable}}</span><span class="label">paneli admin. i środowisk testowych</span></a>
+  <a class="tile{{if .TLSProblems}} warn{{end}}" href="/results?q=tls"><span class="num">{{.TLSProblems}}</span><span class="label">problemów z certyfikatem TLS</span></a>
+  <a class="tile{{if .Unstable}} alert{{end}}" href="/host-states?state=unstable"><span class="num">{{len .Unstable}}</span><span class="label">niestabilnych hostów</span></a>
+</div>
+
+<div class="two">
+<section class="card">
+  <h2>Ostatni przebieg</h2>
+  {{with .LatestRun}}
+  <dl>
+    <dt>Przebieg</dt><dd>#{{.ID}} {{if eq .Kind "import"}}(import){{else}}{{.ConfigName}}{{end}}</dd>
+    <dt>Status</dt><dd>{{template "runstatus" .}}</dd>
+    <dt>Postęp</dt><dd>{{template "progress" .}}</dd>
+    <dt>Rozpoczęty</dt><dd>{{fmtTime .StartedAt}}</dd>
+    <dt>Zakończony</dt><dd>{{fmtTime .FinishedAt}}</dd>
+    <dt>Czas skanu</dt><dd>{{.Duration}}</dd>
+    <dt>Hosty / usługi</dt><dd>{{.HostsUp}} / {{.Services}}</dd>
+  </dl>
+  {{else}}<p>Brak przebiegów. Dodaj <a href="/targets">cele</a> i uruchom <a href="/scans">skan</a>.</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>Detekcje według kategorii</h2>
+  {{if .ByCategory}}
+  <table><tbody>{{range .ByCategory}}
+    <tr><td><a href="/results?cat={{.Key}}">{{catLabel .Key}}</a></td><td class="num">{{.Count}}</td></tr>
+  {{end}}</tbody></table>
+  {{else}}<p class="muted">Brak detekcji.</p>{{end}}
+  {{if .TopProducts}}
+  <h3>Najczęstsze usługi</h3>
+  <p>{{range .TopProducts}}<span class="tag">{{if .Key}}{{.Key}}{{else}}?{{end}} × {{.Count}}</span> {{end}}</p>
+  {{end}}
+</section>
+</div>
+
+<section class="card">
+  <h2>Panele administracyjne i środowiska testowe</h2>
+  {{if .Notable}}
+  <table>
+    <thead><tr><th>Adres</th><th>Detekcja</th><th>Kategoria</th><th class="num">Pewność</th></tr></thead>
+    <tbody>{{range .Notable}}
+      <tr><td><a href="/results/services/{{.ServiceID}}">{{.IP}}:{{.Port}}/{{.Proto}}</a>{{if .VHost}} ({{.VHost}}){{end}}</td>
+          <td>{{.Name}}</td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td><td class="num">{{.Confidence}}%</td></tr>
+    {{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">Nie wykryto.</p>{{end}}
+</section>
+
+<div class="two">
+<section class="card">
+  <h2>Ostatnie zmiany{{if .ChangeRunID}} (przebieg <a href="/changes/{{.ChangeRunID}}">#{{.ChangeRunID}}</a>){{end}}</h2>
+  {{if .ChangesByKind}}
+  <ul class="counts">{{range .ChangesByKind}}<li><span class="badge kind-{{.Key}}">{{kindLabel .Key}}</span> <strong>{{.Count}}</strong></li>{{end}}</ul>
+  <table>
+    <thead><tr><th>Zmiana</th><th>Adres</th><th>Było</th><th>Jest</th></tr></thead>
+    <tbody>{{range .Changes}}
+      <tr><td><span class="badge kind-{{.Kind}}">{{kindLabel .Kind}}</span></td>
+          <td>{{.IP}}{{if .Port}}:{{.Port}}/{{.Proto}}{{end}}</td><td>{{.Old}}</td><td>{{.New}}</td></tr>
+    {{end}}</tbody>
+  </table>
+  <p><a href="/changes/{{.ChangeRunID}}">Wszystkie zmiany tego przebiegu</a></p>
+  {{else}}<p class="muted">Brak zmian: potrzebne są co najmniej dwa przebiegi.</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>Stany hostów</h2>
+  {{if .StateCounts}}
+  <ul class="counts">{{range .StateCounts}}<li><a href="/host-states?state={{.Key}}"><span class="state state-{{.Key}}">{{stateLabel .Key}}</span></a> <strong>{{.Count}}</strong></li>{{end}}</ul>
+  {{end}}
+  <h3>Hosty niestabilne</h3>
+  {{if .Unstable}}
+  <table>
+    <thead><tr><th>Adres</th><th>Historia (stare → nowe)</th><th>Ostatnio widziany</th></tr></thead>
+    <tbody>{{range .Unstable}}
+      <tr><td>{{.IP}}</td><td><span class="flips">{{range .Flips}}<span class="flip {{if .Up}}up{{else}}down{{end}}" title="przebieg #{{.Run}}: {{if .Up}}odpowiada{{else}}brak odpowiedzi{{end}}"></span>{{end}}</span></td><td>{{fmtTime .LastSeen}}</td></tr>
+    {{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">Brak hostów niestabilnych.</p>{{end}}
+</section>
+</div>
+{{end}}{{end}}
+{{template "base" .}}

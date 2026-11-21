@@ -1,0 +1,26 @@
+# Attaches the app to the docker scan lab (lab/compose.yml, network asi-lab,
+# 10.20.0.0/18). Start the lab first: lab/change.sh run1
+#   docker compose -f compose.yml -f compose.lab.yml up -d --build
+# Only the app joins the lab network; the database stays on the private
+# compose network. nmap runs inside the app container only.
+services:
+  app:
+    # Raw sockets for SYN scan (-sS) and ARP host discovery.
+    cap_add: [NET_RAW, NET_ADMIN]
+    environment:
+      ASI_SCAN_PRIVILEGED: "true"
+      ASI_ALLOWED_CIDRS: 10.20.0.0/18
+      # Network address, docker gateway, lab scanner container and this app.
+      ASI_SCAN_EXCLUDE: 10.20.0.0,10.20.0.1,10.20.63.250,10.20.63.251
+    # Lab CoreDNS serves lab.local (staging.lab.local etc.); container names
+    # such as "db" are still resolved by the docker embedded DNS.
+    dns: [10.20.48.90]
+    networks:
+      default: {}
+      lab:
+        ipv4_address: 10.20.63.251
+
+networks:
+  lab:
+    external: true
+    name: asi-lab

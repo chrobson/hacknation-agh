@@ -1,0 +1,33 @@
+{{define "title"}}Wyniki · Attack Surface Intelligence{{end}}
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Wyniki skanu{{with .Run}} #{{.ID}}{{end}}</h1>
+  {{with .Run}}<span class="muted">{{fmtTime .FinishedAt}} · czas skanu {{.Duration}} · <a href="/changes/{{.ID}}">zmiany</a></span>{{end}}
+</div>
+<form method="get" action="/results" class="filters">
+  <label for="r-run">Przebieg</label>
+  <select id="r-run" name="run">{{range .Runs}}<option value="{{.ID}}"{{if eq .ID $.Data.Filter.RunID}} selected{{end}}>#{{.ID}} {{if eq .Kind "import"}}import{{else}}{{.ConfigName}}{{end}} ({{fmtTime .FinishedAt}})</option>{{end}}</select>
+  <label for="r-cat">Kategoria</label>
+  <select id="r-cat" name="cat"><option value="">wszystkie</option>{{range .Categories}}<option value="{{.}}"{{if eq . $.Data.Filter.Category}} selected{{end}}>{{catLabel .}}</option>{{end}}</select>
+  <label for="r-q">Szukaj</label>
+  <input id="r-q" name="q" type="text" value="{{.Filter.Query}}" placeholder="IP, produkt, tytuł, sygnatura">
+  <button type="submit">Filtruj</button>
+</form>
+{{if .Run}}
+<p>Hostów: <strong>{{.Hosts}}</strong>, usług: <strong>{{len .Services}}</strong>.</p>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Adres</th><th>Usługa</th><th>Produkt i wersja</th><th>HTTP</th><th>Detekcje</th><th>Adnotacja</th></tr></thead>
+  <tbody>{{range .Services}}
+  <tr>
+    <td><a href="/results/services/{{.ID}}">{{.IP}}:{{.Port}}/{{.Proto}}</a>{{if .VHost}}<br><small>{{.VHost}}</small>{{end}}{{if .Hostname}}<br><small>{{.Hostname}}</small>{{end}}</td>
+    <td>{{.Banner}}</td>
+    <td>{{.Product}} {{.Version}}{{if .ExtraInfo}} <small>({{.ExtraInfo}})</small>{{end}}</td>
+    <td>{{with .Status}}<span class="badge">{{.}}</span>{{end}} {{.Title}}</td>
+    <td>{{template "dets" .Detections}}</td>
+    <td class="annotation{{if .FalsePos}} fp{{end}}">{{with .Severity}}<span class="badge sev sev-{{.}}">{{.}}</span> {{end}}{{.Annotation}}</td>
+  </tr>{{else}}<tr><td colspan="6" class="muted">Brak usług dla tego filtra.</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{else}}<p>Brak zakończonych przebiegów. Uruchom <a href="/scans">skan</a> albo <a href="/import">zaimportuj</a> wyniki.</p>{{end}}
+{{end}}{{end}}
+{{template "base" .}}

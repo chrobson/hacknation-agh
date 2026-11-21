@@ -145,12 +145,14 @@ func (s *ScanStore) Config(ctx context.Context, id int64) (ScanConfig, error) {
 	return scanConfig(s.DB.QueryRow(ctx, `SELECT `+configCols+` FROM scan_configs WHERE id=$1`, id))
 }
 
-// TargetsByIDs returns the targets with the given ids.
+// TargetsByIDs returns the targets with the given ids. An empty list means
+// every target (a scan configuration with no explicit targets covers all).
 func (s *ScanStore) TargetsByIDs(ctx context.Context, ids []int64) ([]model.Target, error) {
+	q, args := `SELECT id, kind, value, tags FROM targets WHERE id = ANY($1) ORDER BY id`, []any{ids}
 	if len(ids) == 0 {
-		return nil, nil
+		q, args = `SELECT id, kind, value, tags FROM targets ORDER BY id`, nil
 	}
-	rows, err := s.DB.Query(ctx, `SELECT id, kind, value, tags FROM targets WHERE id = ANY($1) ORDER BY id`, ids)
+	rows, err := s.DB.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

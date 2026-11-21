@@ -1,0 +1,59 @@
+{{define "title"}}Skany · Attack Surface Intelligence{{end}}
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Skany</h1>
+  {{if .CanRun}}<a class="button" href="/scans/new">Nowa konfiguracja</a>{{end}}
+</div>
+{{template "flash" $}}
+<p class="hint">Skanowane są wyłącznie sieci z allowlisty: <code>{{.Allowed}}</code>{{if .Exclude}}; zawsze pomijane adresy: <code>{{.Exclude}}</code>{{end}}.
+Faza 1: wykrywanie hostów (<code>nmap -sn</code>), faza 2: usługi i wersje na aktywnych hostach, potem fingerprinting HTTP/TLS, sygnatury i porównanie z poprzednim przebiegiem.</p>
+
+<h2>Konfiguracje</h2>
+{{if .Configs}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Nazwa</th><th>Cele</th><th>Porty</th><th>Tempo (pakiety/s)</th><th>Wątki</th><th>Okno</th><th>Co ile</th><th>Ostatni przebieg</th><th></th></tr></thead>
+  <tbody>{{range .Configs}}
+  <tr>
+    <td>{{.Name}}{{if not .Enabled}} <span class="badge">wyłączona</span>{{end}}</td>
+    <td>{{.TargetsLabel}}</td>
+    <td>top {{.TopPorts}}</td>
+    <td class="num">{{if .MaxRate}}{{.MaxRate}}{{else}}bez limitu{{end}}</td>
+    <td class="num">{{.Workers}}</td>
+    <td>{{if .HasWindow}}{{hhmm .WindowStart}}–{{hhmm .WindowEnd}}{{else}}bez okna{{end}}</td>
+    <td>{{with .EveryMinutes}}{{.}} min{{else}}ręcznie{{end}}</td>
+    <td>{{with .LastRun}}#{{.ID}} {{template "runstatus" .}}{{else}}–{{end}}</td>
+    <td>{{if $.Data.CanRun}}
+      <form method="post" action="/scans/{{.ID}}/run" class="inline"><button type="submit">Skanuj teraz</button></form>
+      <a href="/scans/{{.ID}}/edit">edytuj</a>
+      <form method="post" action="/scans/{{.ID}}/delete" class="inline" onsubmit="return confirm('Usunąć konfigurację?')"><button type="submit" class="danger">usuń</button></form>
+    {{end}}</td>
+  </tr>{{end}}
+  </tbody>
+</table></div>
+{{else}}<p>Brak konfiguracji.{{if .CanRun}} <a href="/scans/new">Utwórz pierwszą</a>.{{end}}</p>{{end}}
+
+<section id="runs" hx-get="/scans" hx-select="#runs" hx-target="this" hx-swap="outerHTML" hx-trigger="every 5s">
+<h2>Przebiegi</h2>
+{{if .Runs}}
+<div class="table-wrap"><table>
+  <thead><tr><th>#</th><th>Rodzaj</th><th>Konfiguracja</th><th>Status</th><th>Postęp</th><th>Hosty</th><th>Usługi</th><th>Start</th><th>Czas skanu</th><th></th></tr></thead>
+  <tbody>{{range .Runs}}
+  <tr>
+    <td>{{if eq .Status "done"}}<a href="/results?run={{.ID}}">#{{.ID}}</a>{{else}}#{{.ID}}{{end}}</td>
+    <td>{{if eq .Kind "import"}}import{{else}}skan{{end}}</td>
+    <td>{{.ConfigName}}</td>
+    <td>{{template "runstatus" .}}</td>
+    <td>{{template "progress" .}}</td>
+    <td class="num">{{.HostsUp}}</td>
+    <td class="num">{{.Services}}</td>
+    <td>{{fmtTime .StartedAt}}</td>
+    <td>{{.Duration}}</td>
+    <td>{{if and .Active $.Data.CanRun}}<form method="post" action="/runs/{{.ID}}/stop" class="inline"><button type="submit" class="danger">Zatrzymaj</button></form>{{end}}
+        {{if eq .Status "done"}}<a href="/changes/{{.ID}}">zmiany</a>{{end}}</td>
+  </tr>{{end}}
+  </tbody>
+</table></div>
+{{else}}<p class="muted">Brak przebiegów.</p>{{end}}
+</section>
+{{end}}{{end}}
+{{template "base" .}}

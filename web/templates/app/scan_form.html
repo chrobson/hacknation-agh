@@ -1,0 +1,40 @@
+{{define "title"}}Konfiguracja skanu · Attack Surface Intelligence{{end}}
+{{define "content"}}{{with .Data}}
+<h1>{{if .New}}Nowa konfiguracja skanu{{else}}Konfiguracja: {{.Config.Name}}{{end}}</h1>
+{{template "flash" $}}
+<form method="post" action="{{if .New}}/scans{{else}}/scans/{{.Config.ID}}{{end}}" class="card">
+  <label for="f-name">Nazwa</label>
+  <input id="f-name" name="name" type="text" maxlength="100" required value="{{.Config.Name}}">
+
+  <fieldset>
+    <legend>Cele</legend>
+    <label class="check"><input type="checkbox" name="all_targets" value="1"{{if not .Config.TargetIDs}} checked{{end}}> wszystkie cele (także dodane później)</label>
+    {{$ids := .Config.TargetIDs}}
+    {{range .Targets}}<label class="check"><input type="checkbox" name="target_ids" value="{{.ID}}"{{if hasID $ids .ID}} checked{{end}}> <code>{{.Value}}</code> {{range .Tags}}<span class="tag">{{.}}</span> {{end}}</label>
+    {{else}}<p class="muted">Brak celów: dodaj je na stronie <a href="/targets">Cele</a>.</p>{{end}}
+  </fieldset>
+
+  <div class="two">
+    <div>
+      <label for="f-top">Liczba najpopularniejszych portów TCP (faza 2)</label>
+      <input id="f-top" name="top_ports" type="number" min="1" max="65535" value="{{.Config.TopPorts}}">
+      <label for="f-rate">Maksymalne tempo całego skanu (pakiety/s, 0 = bez limitu)</label>
+      <input id="f-rate" name="max_rate" type="number" min="0" max="100000" value="{{.Config.MaxRate}}">
+      <label for="f-workers">Liczba równoległych wątków (tempo dzielone po równo)</label>
+      <input id="f-workers" name="workers" type="number" min="1" max="64" value="{{.Config.Workers}}">
+    </div>
+    <div>
+      <label for="f-ws">Okno czasowe: początek (HH:MM, puste = bez okna)</label>
+      <input id="f-ws" name="window_start" type="time" value="{{hhmm .Config.WindowStart}}">
+      <label for="f-we">Okno czasowe: koniec (może być po północy)</label>
+      <input id="f-we" name="window_end" type="time" value="{{hhmm .Config.WindowEnd}}">
+      <label for="f-every">Uruchamiaj co (minuty, puste = tylko ręcznie)</label>
+      <input id="f-every" name="every_minutes" type="number" min="5" value="{{deref .Config.EveryMinutes}}">
+      <label class="check"><input type="checkbox" name="enabled" value="1"{{if .Config.Enabled}} checked{{end}}> harmonogram włączony</label>
+    </div>
+  </div>
+  <p class="hint">Skan, który nie zmieści się w oknie, zostaje zatrzymany (niedokończone chunki wracają do kolejki) i jest wznawiany w następnym oknie.</p>
+  <button type="submit">Zapisz</button> <a href="/scans">Anuluj</a>
+</form>
+{{end}}{{end}}
+{{template "base" .}}

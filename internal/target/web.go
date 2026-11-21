@@ -466,8 +466,9 @@ const fallbackBase = `{{define "base"}}<!doctype html>
 <body>
 <header class="top">
   <a class="brand" href="/">Attack Surface Intelligence</a>
-  <nav>{{block "nav" .}}{{end}}</nav>
+  <nav class="main" hx-get="/nav" hx-trigger="load" hx-swap="innerHTML"></nav>
 </header>
+<nav class="sub">{{block "nav" .}}{{end}}</nav>
 <main>{{block "content" .}}{{end}}</main>
 </body>
 </html>{{end}}`
