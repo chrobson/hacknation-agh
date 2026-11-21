@@ -30,6 +30,24 @@
   <a class="tile{{if .Unstable}} alert{{end}}" href="/host-states?state=unstable"><span class="num">{{len .Unstable}}</span><span class="label">niestabilnych hostów</span></a>
 </div>
 
+{{if .RunID}}
+<section class="card">
+  <h2>Priorytet analityczny: co sprawdzić najpierw</h2>
+  {{if .TopInterest}}
+  <table>
+    <thead><tr><th>Adres</th><th>Usługa</th><th class="num">Ocena</th><th>Dlaczego</th></tr></thead>
+    <tbody>{{range .TopInterest}}
+      <tr><td class="nowrap"><a href="/results/services/{{.ID}}">{{.IP}}:{{.Port}}/{{.Proto}}</a>{{if .VHost}} ({{.VHost}}){{end}}</td>
+          <td>{{.Banner}}{{with .Product}} <small>{{.}}</small>{{end}}</td>
+          <td class="num">{{template "prio" .Interest}}</td>
+          <td>{{range $i, $r := .Interest.Top 3}}{{if $i}}; {{end}}{{$r.Label}}{{end}}</td></tr>
+    {{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">Brak usług z oceną co najmniej 30.</p>{{end}}
+  <p><a href="/results?run={{.RunID}}&amp;sort=priority">Wszystkie usługi według priorytetu</a> · <span class="hint">ocena to deterministyczna suma jawnych reguł, nie ocena podatności</span></p>
+</section>
+{{end}}
+
 <div class="two">
 <section class="card">
   <h2>Ostatni przebieg</h2>

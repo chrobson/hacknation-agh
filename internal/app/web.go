@@ -77,6 +77,7 @@ var tmplFuncs = template.FuncMap{
 	"kindLabel":  kindLabel,
 	"stateLabel": stateLabel,
 	"runLabel":   runLabel,
+	"prioClass":  prioClass,
 	// paren wraps nmap extrainfo in parentheses unless nmap already did.
 	"paren": func(s string) string {
 		if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
@@ -761,6 +762,9 @@ type resultsData struct {
 func (p *Pages) results(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := ResultFilter{Category: r.URL.Query().Get("cat"), Query: strings.TrimSpace(r.URL.Query().Get("q"))}
+	if r.URL.Query().Get("sort") == "priority" {
+		f.Sort = "priority"
+	}
 	if len(f.Query) > 100 {
 		f.Query = f.Query[:100]
 	}
@@ -842,4 +846,17 @@ func (p *Pages) service(w http.ResponseWriter, r *http.Request) {
 		d.Legacy = &lt
 	}
 	p.render(w, r, "service", http.StatusOK, page{Data: d})
+}
+
+// prioClass maps an interest level to an ASCII CSS class suffix.
+func prioClass(level string) string {
+	switch level {
+	case "wysoki":
+		return "high"
+	case "średni":
+		return "medium"
+	case "niski":
+		return "low"
+	}
+	return "none"
 }

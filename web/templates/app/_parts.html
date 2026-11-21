@@ -3,3 +3,4 @@
 {{define "runstatus"}}{{if and .Stopped .Open}}<span class="badge run-paused">zatrzymany</span>{{else if .Processing}}<span class="badge run-running" title="skan zakończony, trwa sondowanie HTTP, sygnatury i porównanie z poprzednim przebiegiem">przetwarzanie</span>{{else}}<span class="badge run-{{.Status}}">{{runLabel .Status}}</span>{{end}}{{end}}
 {{define "progress"}}{{if .ChunksTotal}}<progress max="{{.ChunksTotal}}" value="{{.ChunksDone}}"></progress> {{.ChunksDone}}/{{.ChunksTotal}} fragmentów{{if .ChunksFail}}, <span class="bad">{{.ChunksFail}} błędnych</span>{{end}}{{else}}–{{end}}{{end}}
 {{define "dets"}}{{range .}}<span class="badge cat-{{.Category}}{{with .Severity}} sev-{{.}}{{end}}" title="{{catLabel .Category}}, pewność {{.Confidence}}%{{with .Severity}}, poziom {{.}}{{end}}">{{.Name}}</span> {{end}}{{end}}
+{{define "prio"}}<span class="prio prio-{{prioClass .Level}}" title="{{.Level}}{{with .Labels}}: {{.}}{{end}}">{{.Score}}</span>{{end}}

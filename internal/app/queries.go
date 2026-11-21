@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/chrobson/hacknation-agh/internal/dojo"
+	"github.com/chrobson/hacknation-agh/internal/interest"
+	"github.com/chrobson/hacknation-agh/internal/model"
 )
 
 // RunRow is a scan run with chunk progress.
@@ -178,6 +183,7 @@ type Dashboard struct {
 	StateCounts   []KV
 	Unstable      []HostRow
 	TopProducts   []KV
+	TopInterest   []ServiceRow // services of RunID with interest score >= 30, highest first
 }
 
 // LoadDashboard computes the dashboard from the newest finished run.
@@ -227,6 +233,11 @@ func LoadDashboard(ctx context.Context, db *pgxpool.Pool) (Dashboard, error) {
 			ORDER BY d.category, s.ip, s.port LIMIT 50`, d.RunID); err != nil {
 			return d, err
 		}
+		svcs, err := ListServices(ctx, db, ResultFilter{RunID: d.RunID, Sort: "priority"})
+		if err != nil {
+			return d, err
+		}
+		d.TopInterest = topInterest(svcs, 30, 10)
 	}
 	if err := db.QueryRow(ctx, `SELECT COALESCE(max(run_id),0) FROM changes`).Scan(&d.ChangeRunID); err != nil {
 		return d, err
@@ -333,6 +344,13 @@ type ServiceRow struct {
 	Annotation string
 	Severity   string
 	FalsePos   bool
+	Interest   interest.Result // computed at read time, see internal/interest
+
+	scheme        string
+	tlsExpired    bool
+	tlsSelfSigned bool
+	changeKinds   []string
+	hostUnstable  bool
 }
 
 // DetectionTag is a short detection label.
@@ -342,6 +360,7 @@ type DetectionTag struct {
 	Category   string `json:"category"`
 	Confidence int    `json:"confidence"`
 	Severity   string `json:"severity,omitempty"` // signature severity (evidence), e.g. High for an outdated version
+	Outdated   string `json:"outdated,omitempty"` // evidence "outdated", e.g. "version 4.7 < 6.0"
 }
 
 // ResultFilter narrows the results list.
@@ -349,6 +368,7 @@ type ResultFilter struct {
 	RunID    int64
 	Category string
 	Query    string
+	Sort     string // "priority" = interest score descending; default: address
 }
 
 // ListServices returns the services of a run with HTTP and detection data.
@@ -357,9 +377,15 @@ func ListServices(ctx context.Context, db *pgxpool.Pool, f ResultFilter) ([]Serv
 		SELECT s.id, host(s.ip), s.port, s.proto, s.vhost, COALESCE(h.hostname, ''), s.banner, s.product, s.version, s.extrainfo,
 		       o.status, COALESCE(o.title, ''), COALESCE(o.url, ''), o.response_ms,
 		       COALESCE((SELECT json_agg(json_build_object('signature', d.signature_id, 'name', d.name, 'category', d.category,
-		                 'confidence', d.confidence, 'severity', COALESCE(d.evidence->>'severity', '')) ORDER BY d.confidence DESC, d.signature_id)
+		                 'confidence', d.confidence, 'severity', COALESCE(d.evidence->>'severity', ''),
+		                 'outdated', COALESCE(d.evidence->>'outdated', '')) ORDER BY d.confidence DESC, d.signature_id)
 		                 FROM detections d WHERE d.service_id = s.id), '[]'::json),
-		       COALESCE(a.comment, ''), COALESCE(a.severity, ''), COALESCE(a.false_positive, false)
+		       COALESCE(a.comment, ''), COALESCE(a.severity, ''), COALESCE(a.false_positive, false),
+		       split_part(COALESCE(o.url, ''), ':', 1),
+		       COALESCE((o.tls->>'expired')::boolean, false), COALESCE((o.tls->>'self_signed')::boolean, false),
+		       ARRAY(SELECT DISTINCT c.kind FROM changes c WHERE c.run_id = s.run_id AND c.ip = s.ip AND c.port = s.port
+		             AND c.proto = s.proto AND c.vhost = s.vhost ORDER BY c.kind),
+		       EXISTS (SELECT 1 FROM host_state hs WHERE hs.ip = s.ip AND hs.state = 'unstable')
 		FROM services s
 		LEFT JOIN host_obs h ON h.run_id = s.run_id AND h.ip = s.ip
 		LEFT JOIN http_obs o ON o.service_id = s.id
@@ -380,13 +406,58 @@ func ListServices(ctx context.Context, db *pgxpool.Pool, f ResultFilter) ([]Serv
 		var s ServiceRow
 		var dets []byte
 		if err := rows.Scan(&s.ID, &s.IP, &s.Port, &s.Proto, &s.VHost, &s.Hostname, &s.Banner, &s.Product, &s.Version, &s.ExtraInfo,
-			&s.Status, &s.Title, &s.URL, &s.ResponseMS, &dets, &s.Annotation, &s.Severity, &s.FalsePos); err != nil {
+			&s.Status, &s.Title, &s.URL, &s.ResponseMS, &dets, &s.Annotation, &s.Severity, &s.FalsePos,
+			&s.scheme, &s.tlsExpired, &s.tlsSelfSigned, &s.changeKinds, &s.hostUnstable); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(dets, &s.Detections)
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Interest = interest.Score(out[i].interestInput())
+	}
+	if f.Sort == "priority" {
+		sortByInterest(out)
+	}
+	return out, nil
+}
+
+// interestInput maps a service row to the scoring input. A detection
+// without its own severity gets the same default as in the DefectDojo
+// export (dojo.DetectionSeverity).
+func (s ServiceRow) interestInput() interest.Input {
+	in := interest.Input{Port: s.Port, Proto: s.Proto, Service: s.Banner, Product: s.Product, Scheme: s.scheme,
+		TLSExpired: s.tlsExpired, TLSSelfSigned: s.tlsSelfSigned, ChangeKinds: s.changeKinds, HostUnstable: s.hostUnstable,
+		AnalystSeverity: s.Severity, FalsePositive: s.FalsePos}
+	for _, d := range s.Detections {
+		sev := dojo.DetectionSeverity(model.Detection{Category: d.Category, Evidence: map[string]string{"severity": d.Severity}})
+		in.Detections = append(in.Detections, interest.Detection{Signature: d.Signature, Name: d.Name, Category: d.Category,
+			Severity: string(sev), Confidence: d.Confidence, Outdated: d.Outdated})
+	}
+	return in
+}
+
+// sortByInterest orders rows by interest score descending, then address.
+// The rows come from SQL ordered by address, so a stable sort keeps the IP
+// order (inet order, not text order) within one score.
+func sortByInterest(rows []ServiceRow) {
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Interest.Score > rows[j].Interest.Score })
+}
+
+// topInterest returns at most n rows with a score of at least min from rows
+// already sorted by interest.
+func topInterest(rows []ServiceRow, min, n int) []ServiceRow {
+	var out []ServiceRow
+	for _, r := range rows {
+		if r.Interest.Score < min || len(out) == n {
+			break
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // ServiceDetail is everything known about one service.
@@ -403,5 +474,24 @@ func GetService(ctx context.Context, db *pgxpool.Pool, id int64) (ServiceDetail,
 		s.product, s.version, s.extrainfo, s.cpe
 		FROM services s LEFT JOIN host_obs h ON h.run_id = s.run_id AND h.ip = s.ip WHERE s.id = $1`, id).
 		Scan(&d.ID, &d.RunID, &d.IP, &d.Port, &d.Proto, &d.VHost, &d.Hostname, &d.Banner, &d.Product, &d.Version, &d.ExtraInfo, &d.CPE)
+	if err != nil {
+		return d, err
+	}
+	d.Interest, err = serviceInterest(ctx, db, d.RunID, d.ID)
 	return d, err
+}
+
+// serviceInterest scores one service with the same query as the results
+// list, so the service page and the list always agree.
+func serviceInterest(ctx context.Context, db *pgxpool.Pool, runID, id int64) (interest.Result, error) {
+	rows, err := ListServices(ctx, db, ResultFilter{RunID: runID})
+	if err != nil {
+		return interest.Result{}, err
+	}
+	for _, r := range rows {
+		if r.ID == id {
+			return r.Interest, nil
+		}
+	}
+	return interest.Result{}, nil
 }

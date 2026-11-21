@@ -100,6 +100,7 @@ Skan /18 przy 1000 pakietów/s trwa około 4 minut. Własną sieć skanuje się 
 | RBAC z tworzeniem ról, 4 role z zadania | uprawnienia sprawdzane po stronie serwera (403), role wbudowane i własne (checkboxy uprawnień), dziennik zdarzeń | **Administracja** (użytkownicy, role, dziennik) |
 | Edycja wyników zachowywana między skanami | adnotacje (komentarz, tagi, severity, fałszywy alarm) przypięte do klucza usługi, nie do przebiegu | **Adnotacje**, **Wyniki** → usługa, **Zmiany** |
 | Dashboard | ostatni przebieg, detekcje, panele i staging, ostatnie zmiany, stany hostów | **Pulpit** |
+| Ocena ciekawości i priorytet analityczny | ocena 0–100 liczona przy odczycie jako jawna suma reguł: poziom detekcji × pewność, panel administracyjny, staging, IoT, nieaktualna wersja, odsłonięta baza danych, telnet, API Dockera, problemy TLS, logowanie bez TLS, nowa lub zmieniona usługa; fałszywy alarm zeruje ocenę, poziom analityka ustawia minimum (reguły w [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) | **Pulpit** („Priorytet analityczny”), **Wyniki** (kolumna i sortowanie), usługa |
 | Szyfrowanie w spoczynku | pg_tde dla całej bazy: tabele, indeksy, TOAST, sekwencje, WAL (sekcja 5) | – |
 | Okna czasowe, częstotliwość, wznowienie | konfiguracja skanu: okno (także przez północ), co ile minut; chunk przerwany na końcu okna wraca do kolejki i jest kontynuowany w kolejnym oknie | **Skany** → konfiguracja |
 | Ograniczanie tempa | `max_rate` pakietów/s na cały przebieg (górny limit `ASI_MAX_RATE`), HTTP ≤20 żądań/s | **Skany** → konfiguracja |
@@ -183,7 +184,7 @@ Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`m
 - Wszystkie testy wykonano na macOS z OrbStack (kontenery w maszynie wirtualnej z Linuksem), nie na fizycznym hoście z Linuksem. Tryb sieci hosta na Linuksie jest najprostszy, ale nie był uruchomiony na takim hoście.
 - W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe), bo to faktycznie otwarte porty. Własny interfejs skanera jest rozpoznawany po nagłówku `X-Asi-Instance` i nie dostaje detekcji (strony logowania); inne aplikacje hosta z formularzem logowania (np. lokalny DefectDojo na 8081) są raportowane jak każda inna usługa.
 - Klucz pg_tde leży w lokalnym keyringu w wolumenie Dockera na tym samym hoście; produkcyjnie powinien trafić do KMS (OpenBao/Vault, KMIP). Nazwy tabel i kolumn w katalogu systemowym nie są szyfrowane.
-- Brak pasywnych źródeł danych (CT logs, DNS), oceny „ciekawości” usług i analizy różnic zależnych od pory dnia.
+- Brak pasywnych źródeł danych (CT logs, DNS) i analizy różnic zależnych od pory dnia.
 - Konto użytkownika nie ma zmiany hasła w interfejsie; hasła startowe pochodzą z `.env` przy pierwszym starcie.
 - Rozpoznanie wersji zależy od nmapa `-sV` i sygnatur; usługi bez banera (np. httpbin na 8888) mają pusty produkt. Ogólna sygnatura strony logowania jest wyciszana tylko wtedy, gdy na usłudze trafiła sygnatura produktu, więc formularz logowania nieznanej aplikacji jest raportowany jako `login-page`.
 

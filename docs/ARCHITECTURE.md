@@ -35,6 +35,22 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export | seed-
 - **Host niestabilny/nieaktywny** (konfigurowalne): `inactive` po `ASI_INACTIVE_AFTER_MISSES=3` kolejnych brakach odpowiedzi; `unstable`, gdy w ostatnich `ASI_UNSTABLE_WINDOW=5` przebiegach stan zmienił się co najmniej `ASI_UNSTABLE_IF_FLIPS=2` razy.
 - **Usługa niestabilna**: ta sama reguła dla klucza usługi, liczona z zapisanych zmian `new`/`gone` (bez osobnej tabeli): gdy usługa znika lub wraca w bieżącym przebiegu, a razem z poprzednimi `ASI_UNSTABLE_WINDOW-2` przebiegami daje to co najmniej `ASI_UNSTABLE_IF_FLIPS` przejść, powstaje zmiana `unstable` z portem (pole `flips`). Usługi hosta, który sam jest `unstable` w tym przebiegu, nie dostają osobnego zdarzenia.
 
+## Ocena ciekawości (priorytet analityczny)
+
+`internal/interest` to czysta funkcja `Score(Input) Result`: ocena 0–100 liczona przy każdym odczycie (`ListServices`) z danych już zapisanych w bazie, bez migracji i bez zmian w potoku skanu. Pokazują ją pulpit (usługi z oceną ≥ 30, top 10), lista wyników (kolumna „Priorytet”, `sort=priority`) i strona usługi (tabela reguł z punktami). To kolejność przeglądu, nie ocena podatności; nie trafia do eksportu.
+
+| Reguła | Punkty |
+|---|---|
+| najwyższy poziom detekcji × pewność/100 (domyślny poziom jak w eksporcie DefectDojo) | Critical 60, High 45, Medium 25, Low 10, Info 0 |
+| kategoria (każda raz) | panel administracyjny +20, staging +15, IoT +15, CMS +5 |
+| nieaktualna wersja (`outdated` w dowodzie) | +15 |
+| typ usługi (najpierw nazwa z nmapa, potem port; tylko najwyższa klasa) | API Dockera 2375 +40, telnet +30, baza danych lub cache (PostgreSQL, MySQL, MSSQL, Oracle, MongoDB, Redis, Memcached, Elasticsearch, CouchDB, Cassandra) +20, zdalny pulpit (RDP, VNC) +20, FTP +15, broker (AMQP, MQTT) +10 |
+| TLS | wygasły certyfikat +10, samopodpisany +5, panel lub `login-page` po zwykłym HTTP +10 |
+| zmiany w przebiegu | `new` +15, `changed` +5, `unstable` lub host niestabilny +5 |
+| adnotacja analityka | fałszywy alarm: 0; poziom ustawia minimum (Critical 90, High 70, Medium 40, Low 15), Info ogranicza ocenę do 10 |
+
+Suma jest obcinana do 100. Poziomy: ≥ 60 wysoki, 30–59 średni, 1–29 niski, 0 brak.
+
 ## Formaty wymiany (`testdata/`)
 
 - **Import celów**: CSV `value,tags` (tagi rozdzielone `;`) lub JSON `[{"value","tags":[]}]`. Raport: `{"imported","duplicates","errors":[{"line","value","error"}]}`.

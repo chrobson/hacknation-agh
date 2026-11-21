@@ -298,6 +298,8 @@ if [ "$mode" = smoke ]; then
   log "SMOKE OK"
   exit 0
 fi
+grep -q "Priorytet analityczny" "$OUT/dashboard.html" || fail "dashboard: interest card"
+curl -fsS -b "$JAR" "$BASE/results?sort=priority" | grep -q 'class="prio' || fail "results sorted by priority"
 
 for run in run2 run3; do
   log "lab variant $run"

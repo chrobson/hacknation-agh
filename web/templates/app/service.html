@@ -15,6 +15,19 @@
   </dl>
 </section>
 <section class="card">
+  <h2>Ocena ciekawości</h2>
+  {{with .Interest}}
+  <p>{{template "prio" .}} <strong>{{.Score}}/100</strong>, priorytet: {{.Level}}</p>
+  {{if .Reasons}}
+  <table>
+    <thead><tr><th>Reguła</th><th class="num">Punkty</th></tr></thead>
+    <tbody>{{range .Reasons}}<tr><td>{{.Label}}</td><td class="num">{{if .Points}}+{{.Points}}{{else}}–{{end}}</td></tr>{{end}}</tbody>
+  </table>
+  {{else}}<p class="muted">Żadna reguła nie przyznała punktów.</p>{{end}}
+  {{end}}
+  <p class="hint">Ocena to deterministyczna suma jawnych reguł (detekcje, typ usługi, TLS, zmiany, adnotacja analityka), ograniczona do 100; służy do ustalenia kolejności przeglądu i nie jest oceną podatności.</p>
+</section>
+<section class="card">
   <h2>Adnotacja analityka</h2>
   <div hx-get="/annotations/cell?ip={{.IP}}&amp;port={{.Port}}&amp;proto={{.Proto}}&amp;vhost={{q .VHost}}&amp;return={{q $.Data.Return}}" hx-trigger="load"><span class="muted">wczytywanie…</span></div>
   <p class="hint">Adnotacje są przypisane do klucza (IP, port, protokół, vhost) i zostają przy kolejnych skanach.</p>

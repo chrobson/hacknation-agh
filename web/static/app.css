@@ -181,3 +181,10 @@ progress { width: 10rem; vertical-align: middle; }
   table { display: block; overflow-x: auto; }
   dl { grid-template-columns: 1fr; }
 }
+
+/* interest score (priorytet analityczny) */
+.prio { display: inline-block; min-width: 2.2rem; padding: .05rem .4rem; border-radius: 4px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; cursor: help; }
+.prio-high { background: var(--err-bg); color: var(--err); }
+.prio-medium { background: var(--warn-bg); color: var(--warn); }
+.prio-low { background: var(--info-bg); }
+.prio-none { color: var(--muted); }

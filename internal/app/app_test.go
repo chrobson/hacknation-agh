@@ -11,6 +11,7 @@ import (
 
 	"github.com/chrobson/hacknation-agh/internal/auth"
 	"github.com/chrobson/hacknation-agh/internal/httpfp"
+	"github.com/chrobson/hacknation-agh/internal/interest"
 	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/store"
 	"github.com/chrobson/hacknation-agh/internal/web"
@@ -84,20 +85,23 @@ func TestPagesRender(t *testing.T) {
 	ws, we := 22*time.Hour, 6*time.Hour
 	status := 200
 	respMS := 1108
+	hot := interest.Result{Score: 75, Level: "wysoki", Reasons: []interest.Reason{{Label: "detekcja WordPress: poziom High", Points: 40},
+		{Label: "nieaktualna wersja (version 4.7 < 6.0)", Points: 15}, {Label: "panel administracyjny", Points: 20}}}
 	pages := map[string]any{
 		"dashboard": Dashboard{RunID: 3, LatestRun: &run, ActiveRuns: []RunRow{{ID: 4, Status: "running", ChunksTotal: 10, ChunksDone: 3, StartedAt: &now}},
 			ByCategory: []KV{{"admin-panel", 2}}, Notable: []Finding{{ServiceID: 1, IP: "10.20.9.110", Port: 80, Proto: "tcp", Name: "Panel", Category: "admin-panel"}},
 			ChangeRunID: 3, ChangesByKind: []KV{{"new", 1}}, Changes: []ChangeRow{{Kind: "changed", IP: "10.20.40.70", Port: 80, Proto: "tcp", Old: "a", New: "b"}},
-			StateCounts: []KV{{"unstable", 1}}, Unstable: []HostRow{{IP: "10.20.60.120", State: "unstable"}}},
+			StateCounts: []KV{{"unstable", 1}}, Unstable: []HostRow{{IP: "10.20.60.120", State: "unstable"}},
+			TopInterest: []ServiceRow{{ID: 1, IP: "10.20.0.10", Port: 80, Proto: "tcp", Banner: "http", Product: "nginx", Interest: hot}}},
 		"scans": scansData{CanRun: true, HasRunner: true, Runs: []RunRow{run},
 			Configs: []configRow{{ScanConfig: store.ScanConfig{ID: 1, Name: "lab", TopPorts: 1000, MaxRate: 1000, Workers: 4, WindowStart: &ws, WindowEnd: &we, EveryMinutes: &every, Enabled: true}, TargetsLabel: "wszystkie cele", LastRun: &run}}},
 		"scan_form": scanFormData{New: false, Config: store.ScanConfig{ID: 1, Name: "lab", TargetIDs: []int64{2}, WindowStart: &ws, WindowEnd: &we},
 			Targets: []model.Target{{ID: 2, Value: "10.20.0.0/18", Tags: []string{"lab"}}}},
 		"results": resultsData{Run: &run, Runs: []RunRow{run}, Filter: ResultFilter{RunID: 3}, Categories: []string{"cms"},
-			Services: []ServiceRow{{ID: 1, IP: "10.20.0.10", Port: 80, Proto: "tcp", Banner: "http", Status: &status, Title: "x", ResponseMS: &respMS,
+			Services: []ServiceRow{{ID: 1, IP: "10.20.0.10", Port: 80, Proto: "tcp", Banner: "http", Status: &status, Title: "x", ResponseMS: &respMS, Interest: hot,
 				Detections: []DetectionTag{{Signature: "nginx", Name: "nginx", Category: "server", Confidence: 85},
 					{Signature: "wordpress", Name: "WordPress", Category: "cms", Confidence: 90, Severity: "High"}}}}},
-		"service": serviceData{Service: ServiceDetail{ServiceRow: ServiceRow{ID: 1, IP: "10.20.0.11", Port: 443, Proto: "tcp"}, RunID: 3},
+		"service": serviceData{Service: ServiceDetail{ServiceRow: ServiceRow{ID: 1, IP: "10.20.0.11", Port: 443, Proto: "tcp", Interest: hot}, RunID: 3},
 			HTTP: &model.HTTPObs{URL: "https://10.20.0.11/", Status: 200, ResponseMS: 1108, Headers: map[string][]string{"Server": {"nginx"}},
 				Cookies: []model.Cookie{{Name: "s"}}, Redirects: []model.Redirect{{URL: "https://x/", Status: 301}},
 				TLS: &model.TLSInfo{Subject: "CN=secure.lab.local", SelfSigned: true}},
@@ -118,6 +122,11 @@ func TestPagesRender(t *testing.T) {
 		}
 		if (name == "results" || name == "service") && (!strings.Contains(w.Body.String(), "1108 ms") || !strings.Contains(w.Body.String(), "sev-High")) {
 			t.Errorf("%s: response time or severity missing", name)
+		}
+		if want := map[string]string{"dashboard": "Priorytet analityczny", "results": `class="prio`, "service": "Ocena ciekawości"}[name]; want != "" {
+			if !strings.Contains(w.Body.String(), want) || !strings.Contains(w.Body.String(), "prio-high") {
+				t.Errorf("%s: interest score missing (%q)", name, want)
+			}
 		}
 	}
 	// nav hides items the user may not use
