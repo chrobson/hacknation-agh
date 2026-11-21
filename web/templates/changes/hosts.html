@@ -1,0 +1,33 @@
+{{define "title"}}Stany hostów{{end}}
+{{define "content"}}
+<h1>Stany hostów</h1>
+<p class="hint">
+  Host jest <strong>nieaktywny</strong> po {{.Cfg.InactiveAfterMisses}} kolejnych przebiegach bez odpowiedzi,
+  a <strong>niestabilny</strong>, gdy w ostatnich {{.Cfg.Window}} obserwacjach zmienił stan co najmniej {{.Cfg.UnstableIfFlips}} razy.
+</p>
+<nav class="filters">
+  <a href="/host-states"{{if eq .Filter ""}} class="active"{{end}}>wszystkie</a>
+  {{range .States}}<a href="/host-states?state={{.}}"{{if eq $.Filter (print .)}} class="active"{{end}}>{{stateLabel .}} ({{stateCount $.Counts .}})</a> {{end}}
+</nav>
+{{if .Hosts}}
+<table class="grid">
+  <thead><tr><th>Adres IP</th><th>Stan</th><th>Kolejne braki</th><th>Zmiany stanu</th><th>Historia</th><th>Pierwszy raz</th><th>Ostatnio widziany</th><th></th></tr></thead>
+  <tbody>
+  {{range .Hosts}}
+  <tr>
+    <td><code>{{.IP}}</code></td>
+    <td><span class="state state-{{.State}}">{{stateLabel .State}}</span></td>
+    <td class="num">{{.Misses}}</td>
+    <td class="num">{{transitions .Flips}}</td>
+    <td class="flips">{{range .Flips}}<span title="przebieg #{{.RunID}}" class="flip {{if .Up}}up{{else}}down{{end}}">{{if .Up}}&#9650;{{else}}&#9660;{{end}}</span>{{end}}</td>
+    <td>{{fmtTime .FirstSeen}}</td>
+    <td>{{fmtTime .LastSeen}}</td>
+    <td><a href="/annotations?ip={{.IP}}">adnotacje</a></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p>Brak hostów w tym stanie.</p>
+{{end}}
+{{end}}

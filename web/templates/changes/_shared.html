@@ -1,0 +1,16 @@
+{{define "nav"}}<a href="/changes">Zmiany</a> <a href="/host-states">Stany hostów</a> <a href="/annotations">Adnotacje</a>{{end}}
+
+{{/* annotation_cell: CellData. Swapped in place by htmx after editing.
+     Targets use "closest" because one key can appear in several rows
+     (a changed service yields one row per field), so ids are not unique. */}}
+{{define "annotation_cell"}}<div class="annotation" id="{{keyID .Key}}">
+  {{- with .Ann}}
+  {{if .FalsePositive}}<span class="badge fp">fałszywy alarm</span>{{end}}
+  {{if .Severity}}<span class="badge sev sev-{{.Severity}}">{{.Severity}}</span>{{end}}
+  {{range .Tags}}<span class="tag">{{.}}</span> {{end}}
+  {{if .Comment}}<span class="comment">{{.Comment}}</span>{{end}}
+  {{- end}}
+  {{if .CanEdit}}<a class="edit" href="/annotations/edit?{{withReturn (keyQuery .Key) .Return}}"
+     hx-get="/annotations/edit?{{withReturn (keyQuery .Key) .Return}}" hx-target="closest .annotation" hx-swap="outerHTML">
+     {{- if .Ann}}edytuj{{else}}dodaj adnotację{{end}}</a>{{end}}
+</div>{{end}}

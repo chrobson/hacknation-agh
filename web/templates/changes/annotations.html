@@ -1,0 +1,35 @@
+{{define "title"}}Adnotacje{{end}}
+{{define "content"}}
+<h1>Adnotacje</h1>
+<p class="hint">Adnotacje są przypisane do adresu, portu, protokołu i vhosta, a nie do przebiegu, więc zostają po kolejnych skanach.</p>
+<form method="get" action="/annotations" class="inline">
+  <label>Adres IP <input name="ip" value="{{.IP}}" placeholder="np. 10.20.0.10"></label>
+  <button type="submit">Filtruj</button>
+</form>
+{{if .CanEdit}}
+<form method="get" action="/annotations/edit" class="inline">
+  <input type="hidden" name="return" value="{{.Return}}">
+  <label>IP <input name="ip" required></label>
+  <label>Port <input name="port" type="number" min="0" max="65535" value="0"></label>
+  <label>Protokół <select name="proto"><option value="">(host)</option><option>tcp</option><option>udp</option></select></label>
+  <label>Vhost <input name="vhost"></label>
+  <button type="submit">Nowa adnotacja</button>
+</form>
+{{end}}
+{{if .Items}}
+<table class="grid">
+  <thead><tr><th>Zasób</th><th>Adnotacja</th><th>Zmieniono</th></tr></thead>
+  <tbody>
+  {{range .Items}}
+  <tr>
+    <td><code>{{keyStr .Key}}</code></td>
+    <td>{{template "annotation_cell" (cell .Key . $.CanEdit $.Return)}}</td>
+    <td>{{fmtTime .UpdatedAt}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p>Brak adnotacji.</p>
+{{end}}
+{{end}}

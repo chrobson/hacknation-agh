@@ -1,0 +1,38 @@
+{{define "title"}}Zmiany między przebiegami{{end}}
+{{define "content"}}
+<h1>Zmiany między przebiegami</h1>
+
+<section class="summary">
+  <h2>Stany hostów</h2>
+  <ul class="counts">
+  {{range .States}}<li><a href="/host-states?state={{.}}">{{stateLabel .}}</a>: <strong>{{stateCount $.StateCounts .}}</strong></li>
+  {{end}}</ul>
+</section>
+
+<section>
+  <h2>Przebiegi</h2>
+  {{if .Runs}}
+  <table class="grid">
+    <thead><tr>
+      <th>Przebieg</th><th>Rodzaj</th><th>Status</th><th>Zakończony</th><th>Porównany z</th>
+      {{range .Kinds}}<th>{{kindShort .}}</th>{{end}}<th>Razem</th>
+    </tr></thead>
+    <tbody>
+    {{range .Runs}}
+    <tr>
+      <td><a href="/changes/{{.RunID}}">#{{.RunID}}</a></td>
+      <td>{{if eq .Kind "import"}}import{{else}}skan{{end}}</td>
+      <td>{{.Status}}</td>
+      <td>{{fmtTime .FinishedAt}}</td>
+      <td>{{if not .Applied}}<em>nie porównano</em>{{else if .PrevRunID}}#{{.PrevRunID}}{{else}}<em>przebieg bazowy</em>{{end}}</td>
+      {{$c := .Counts}}{{range $.Kinds}}<td class="num">{{countOf $c .}}</td>{{end}}
+      <td class="num"><strong>{{.Total}}</strong></td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>Brak przebiegów skanu.</p>
+  {{end}}
+</section>
+{{end}}
