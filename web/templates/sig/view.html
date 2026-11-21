@@ -1,0 +1,29 @@
+{{define "title"}}{{.Title}} · Attack Surface Intelligence{{end}}
+{{define "nav"}}<a href="/signatures">Sygnatury</a>{{end}}
+{{define "content"}}
+<section class="page">
+  <header class="page-head">
+    <h1>{{.Sig.Name}} <code>{{.Sig.ID}}</code></h1>
+    <div class="actions">
+      <a href="/signatures">Wróć do listy</a>
+      {{if not .Sig.Builtin}}
+        <a class="button" href="/signatures/{{.Sig.ID}}/edit">Edytuj</a>
+        <form method="post" action="/signatures/{{.Sig.ID}}/delete" onsubmit="return confirm('Usunąć sygnaturę {{.Sig.ID}}?')"><button type="submit" class="danger">Usuń</button></form>
+      {{end}}
+    </div>
+  </header>
+  <dl class="meta">
+    <dt>Źródło</dt><dd>{{if .Sig.Builtin}}wbudowana (tylko do odczytu){{else}}własna{{end}}</dd>
+    <dt>Stan</dt><dd>{{if .Sig.Enabled}}włączona{{else}}wyłączona{{end}}</dd>
+    {{with .Parsed}}
+    <dt>Kategoria</dt><dd>{{.Category}}</dd>
+    <dt>Pewność</dt><dd>{{.Confidence}}%</dd>
+    <dt>Warunek</dt><dd>{{if eq .Condition "and"}}wszystkie dopasowania (and){{else}}dowolne dopasowanie (or){{end}}</dd>
+    {{with .Description}}<dt>Opis</dt><dd>{{.}}</dd>{{end}}
+    {{end}}
+  </dl>
+  {{if .Errors}}<div class="errors"><h2>Sygnatura nie przechodzi walidacji</h2><ul>{{range .Errors}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+  <h2>YAML</h2>
+  <pre class="code">{{.YAML}}</pre>
+</section>
+{{end}}

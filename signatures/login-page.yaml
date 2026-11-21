@@ -1,0 +1,13 @@
+id: login-page
+name: Strona logowania (/login)
+category: admin-panel
+confidence: 50
+description: Formularz logowania na stronie głównej lub pod /login. Wykrywany po polu hasła, bez prób logowania.
+condition: or
+matchers:
+  - type: body
+    regex: '(?i)<input[^>]+type=["'']?password'
+  - type: path
+    path: /login
+    status: [200]
+    regex: '(?i)<input[^>]+type=["'']?password'

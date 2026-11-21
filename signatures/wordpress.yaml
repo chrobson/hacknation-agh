@@ -1,0 +1,16 @@
+id: wordpress
+name: WordPress
+category: cms
+confidence: 90
+description: CMS WordPress (meta generator, ścieżki wp-content/wp-includes, nagłówek Link api.w.org, ciasteczka wordpress_*).
+condition: or
+matchers:
+  - type: body
+    regex: '<meta name="generator" content="WordPress ?(?P<version>[0-9.]*)'
+  - type: body
+    regex: '/wp-(?:content|includes)/'
+  - type: header
+    name: Link
+    regex: 'api\.w\.org'
+  - type: cookie
+    regex: '^wordpress_'

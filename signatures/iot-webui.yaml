@@ -1,0 +1,17 @@
+id: iot-webui
+name: Interfejs WWW urządzenia IoT
+category: iot
+confidence: 60
+description: Wbudowany interfejs WWW routera, kamery lub rejestratora (typowe serwery embedded, realm Basic, tytuły).
+condition: or
+matchers:
+  - type: header
+    name: Server
+    regex: '(?i)GoAhead|Boa/|mini_httpd|thttpd|uc-httpd|RomPager|micro_httpd|Hikvision-Webs|App-webs|DNVRS-Webs'
+  - type: header
+    name: WWW-Authenticate
+    regex: '(?i)realm="?(?:router|camera|ip ?camera|nvr|dvr|netgear|tp-link|d-link|linksys|hikvision)'
+  - type: title
+    regex: '(?i)\b(?:router|ip ?camera|webcam|nvr|dvr|network video|smart home|thermostat|access point|routeros|openwrt|luci|onvif)\b'
+  - type: body
+    regex: '/cgi-bin/luci|doc/page/login\.asp|/webcomponents/|RouterOS'

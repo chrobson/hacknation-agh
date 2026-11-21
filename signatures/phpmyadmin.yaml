@@ -1,0 +1,17 @@
+id: phpmyadmin
+name: phpMyAdmin
+category: admin-panel
+confidence: 95
+description: Panel phpMyAdmin (tytuł, ciasteczka phpMyAdmin/pma_*, ścieżka /phpmyadmin/).
+condition: or
+matchers:
+  - type: title
+    regex: 'phpMyAdmin'
+  - type: cookie
+    regex: '^(?:phpMyAdmin|pma_)'
+  - type: body
+    regex: 'PMA_commonParams|pma_absolute_uri|phpmyadmin\.css'
+  - type: path
+    path: /phpmyadmin/
+    status: [200]
+    regex: '<title>phpMyAdmin'

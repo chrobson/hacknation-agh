@@ -1,0 +1,14 @@
+id: joomla
+name: Joomla!
+category: cms
+confidence: 85
+description: CMS Joomla! (meta generator, zasoby /media/jui, /media/system).
+condition: or
+matchers:
+  - type: body
+    regex: '<meta name="generator" content="Joomla!'
+  - type: header
+    name: X-Content-Encoded-By
+    regex: 'Joomla'
+  - type: body
+    regex: '/media/(?:jui|system)/(?:js|css)/'

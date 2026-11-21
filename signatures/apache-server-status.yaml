@@ -1,0 +1,11 @@
+id: apache-server-status
+name: Apache mod_status (/server-status)
+category: server
+confidence: 90
+description: Publicznie dostępna strona /server-status modułu mod_status (ujawnia klientów i adresy URL).
+condition: or
+matchers:
+  - type: path
+    path: /server-status
+    status: [200]
+    regex: 'Apache Server Status for|Server Version: Apache(?:/(?P<version>[0-9.]+))?'

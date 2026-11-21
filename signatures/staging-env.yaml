@@ -1,0 +1,11 @@
+id: staging-env
+name: Środowisko testowe / staging
+category: staging
+confidence: 70
+description: Nazwa hosta (vhost, SAN certyfikatu, przekierowania) lub tytuł wskazujący na środowisko dev/test/staging.
+condition: or
+matchers:
+  - type: hostname
+    regex: '(?i)(?:^|[.-])(?:staging|stage|stg|dev|devel|develop|test|testing|uat|qa|preprod|sandbox)(?:[0-9]*)(?:[.-]|$)'
+  - type: title
+    regex: '(?i)\b(?:staging|preprod|test(?:ing)? (?:environment|server|site|instance)|dev(?:elopment)? (?:environment|server|instance)|środowisko (?:testowe|deweloperskie))\b'

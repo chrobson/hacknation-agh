@@ -1,0 +1,8 @@
+id: tls-self-signed
+name: Certyfikat TLS samopodpisany
+category: other
+confidence: 95
+description: Usługa prezentuje certyfikat podpisany samym sobą (brak zaufanego łańcucha).
+matchers:
+  - type: tls
+    self_signed: true

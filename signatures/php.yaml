@@ -1,0 +1,12 @@
+id: php
+name: PHP
+category: framework
+confidence: 80
+description: Interpreter PHP ujawniony w nagłówku X-Powered-By lub ciasteczku PHPSESSID.
+condition: or
+matchers:
+  - type: header
+    name: X-Powered-By
+    regex: 'PHP/(?P<version>[0-9.]+)'
+  - type: cookie
+    name: PHPSESSID

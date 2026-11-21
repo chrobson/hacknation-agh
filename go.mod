@@ -5,6 +5,8 @@ go 1.26.0
 require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/jackc/pgx/v5 v5.13.0
+	go.yaml.in/yaml/v3 v3.0.6
+	golang.org/x/time v0.16.0
 )
 
 require (

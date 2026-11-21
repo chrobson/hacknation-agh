@@ -1,0 +1,13 @@
+id: mosquitto-mqtt
+name: Broker MQTT (Mosquitto)
+category: iot
+confidence: 85
+description: Broker MQTT (Eclipse Mosquitto) wykryty po produkcie/banerze z nmapa lub porcie 1883/8883.
+condition: or
+matchers:
+  - type: service
+    product: '(?i)mosquitto|mqtt'
+  - type: service
+    banner: '(?i)mosquitto|mqtt'
+  - type: service
+    ports: [1883, 8883]

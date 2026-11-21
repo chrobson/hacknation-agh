@@ -1,0 +1,16 @@
+id: tomcat-manager
+name: Apache Tomcat Manager
+category: admin-panel
+confidence: 90
+description: Panel Tomcat Manager pod /manager/html (realm Basic "Tomcat Manager Application" lub strona managera). Bez prób logowania.
+condition: or
+matchers:
+  - type: path
+    path: /manager/html
+    status: [401]
+    header: WWW-Authenticate
+    header_regex: 'Tomcat Manager'
+  - type: path
+    path: /manager/html
+    status: [200]
+    regex: 'Tomcat Web Application Manager'
