@@ -175,13 +175,16 @@ agh_template() {
   # ports of this host seen in all three runs (services outside the template
   # that run on this machine); changes: 8787 back and unstable.
   python3 - "$ip" "$p1" "$p2" "$p3" > "$out/expected_run3.json" <<'PY'
-import json, sys
+import json, os, sys
 ip, runs = sys.argv[1], [set(map(int, a.split())) for a in sys.argv[2:5]]
 tpl = {8787: [], 8888: ["httpbin"], 15432: ["postgresql"], 5673: ["rabbitmq-amqp"],
        15673: ["rabbitmq-management"], 3001: ["gitea"], 2223: []}
 other = (runs[0] & runs[1] & runs[2]) - set(tpl)
 svcs = [{"port": p, "proto": "tcp", "in_top1000": True, "detections": d} for p, d in sorted(tpl.items())]
-svcs += [{"port": p, "proto": "tcp", "in_top1000": False, "detections": []} for p in sorted(other)]
+# The app's own database is visible on localhost in host/native mode and is
+# a true PostgreSQL detection.
+own = {int(os.environ.get("ASI_DB_PORT", "0")): ["postgresql"]}
+svcs += [{"port": p, "proto": "tcp", "in_top1000": False, "detections": own.get(p, [])} for p in sorted(other)]
 print(json.dumps({"run": "agh-run3", "network": ip + "/32", "infra": [],
     "hosts": [{"ip": ip, "name": "docker-host", "services": svcs}],
     "changes_from_prev": [{"kind": k, "ip": ip, "port": 8787, "proto": "tcp", "in_top1000": True}
