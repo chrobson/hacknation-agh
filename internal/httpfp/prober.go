@@ -71,6 +71,11 @@ type Options struct {
 	Now func() time.Time
 	// SkipFavicon disables favicon fetching.
 	SkipFavicon bool
+	// LatencySample enables one extra HEAD request to the first hop, on a
+	// warm connection, after the probe; the stored response time is the
+	// smaller of the two samples (cold starts otherwise show up as latency
+	// changes between runs).
+	LatencySample bool
 	// DialContext overrides the network dialer (tests). It receives the
 	// pinned "ip:port" address, never a hostname.
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -416,6 +421,16 @@ func (p *HTTPProber) Probe(ctx context.Context, ep model.Endpoint) (model.HTTPOb
 	if !p.opt.SkipFavicon {
 		if h, ok := p.favicon(ctx, c, obs.URL, last.Body, t.hostname); ok {
 			obs.FaviconMMH3 = &h
+		}
+	}
+	// The first request often pays for a cold start (JIT, template caches,
+	// a new connection), which made runs differ by hundreds of ms on healthy
+	// services. A second, warm HEAD to the first hop gives a steadier sample;
+	// the smaller of the two is stored. An injected delay (e.g. a latency
+	// toxic) slows every response, so it still shows.
+	if p.opt.LatencySample && obs.ResponseMS > 0 {
+		if r, err := p.fetch(ctx, c, http.MethodHead, BaseURL(ep), 0, nil); err == nil {
+			obs.ResponseMS = min(obs.ResponseMS, max(1, int(r.Duration.Milliseconds())))
 		}
 	}
 	return obs, nil

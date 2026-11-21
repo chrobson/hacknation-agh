@@ -202,3 +202,41 @@ func TestFetchPathRetries(t *testing.T) {
 		t.Fatalf("Timeout() = %v", p.Timeout())
 	}
 }
+
+func TestProbeLatencySampleIgnoresColdStart(t *testing.T) {
+	var n atomic.Int32
+	var methods []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		if n.Add(1) == 1 {
+			time.Sleep(600 * time.Millisecond) // cold start of the first request only
+		}
+		fmt.Fprint(w, "<title>warm</title>")
+	}))
+	defer srv.Close()
+	obs, err := New(Options{SkipFavicon: true, LatencySample: true}).Probe(context.Background(), endpointFor(t, srv.URL, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obs.ResponseMS <= 0 || obs.ResponseMS >= 600 {
+		t.Fatalf("ResponseMS = %d, want the warm sample", obs.ResponseMS)
+	}
+	if fmt.Sprint(methods) != "[GET HEAD]" {
+		t.Fatalf("requests %v, want [GET HEAD]", methods)
+	}
+}
+
+func TestProbeLatencySampleKeepsInjectedDelay(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(550 * time.Millisecond) // a latency toxic slows every response
+		fmt.Fprint(w, "<title>slow</title>")
+	}))
+	defer srv.Close()
+	obs, err := New(Options{SkipFavicon: true, LatencySample: true}).Probe(context.Background(), endpointFor(t, srv.URL, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obs.ResponseMS < 550 {
+		t.Fatalf("ResponseMS = %d, want >= 550", obs.ResponseMS)
+	}
+}

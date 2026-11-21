@@ -64,6 +64,8 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 		Limiter:   rate.NewLimiter(rate.Limit(HTTPProbeRate), 5),
 		Allow:     c.Allow.AllowsAddr,
 		UserAgent: "asi-discovery/1.0 (+security inventory scan)",
+		// A warm second sample keeps cold starts out of the latency diff.
+		LatencySample: true,
 	})
 	c.Engine = sig.NewEngine(sigs, sig.NewHTTPFetcher(c.Prober))
 	sig.OnChange = func(ctx context.Context) {
