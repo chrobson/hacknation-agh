@@ -75,6 +75,7 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	c.Runner.ExtraPorts = scan.DefaultExtraPorts
 	c.Runner.MaxRate = cfg.MaxRate
 	c.Runner.AllowedPorts = cfg.ScanPorts
+	c.Runner.AllPortsMaxAddrs = cfg.AllPortsMaxAddrs
 
 	// Imports (nmap XML, Generic Findings) are compared like scan runs,
 	// limited to the hosts in the file, and never store hosts outside the

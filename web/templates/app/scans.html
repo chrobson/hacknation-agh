@@ -16,8 +16,8 @@ Faza 1: wykrywanie hostów (<code>nmap -sn</code>), faza 2: usługi i wersje na 
   <tr>
     <td>{{.Name}}{{if not .Enabled}} <span class="badge">wyłączona</span>{{end}}</td>
     <td>{{.TargetsLabel}}</td>
-    <td>top {{.TopPorts}}</td>
-    <td class="num">{{.MaxRate}}{{with .Ports}} · porty {{.}}{{end}}</td>
+    <td>{{.PortsLabel}}</td>
+    <td class="num">{{.MaxRate}}</td>
     <td class="num">{{.Workers}}</td>
     <td>{{if .HasWindow}}{{hhmm .WindowStart}}–{{hhmm .WindowEnd}}{{else}}bez okna{{end}}</td>
     <td>{{with .EveryMinutes}}{{.}} min{{else}}ręcznie{{end}}</td>

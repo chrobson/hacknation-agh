@@ -202,3 +202,17 @@ func TestServiceArgsExplicitPorts(t *testing.T) {
 		t.Errorf("got %s\nwant %s", got, want)
 	}
 }
+
+func TestServiceArgsAllPorts(t *testing.T) {
+	all := make([]int, 65535)
+	for i := range all {
+		all[i] = i + 1
+	}
+	got := strings.Join(ServiceArgs([]netip.Addr{netip.MustParseAddr("127.0.0.1")}, Opts{Ports: all}), " ")
+	if !strings.Contains(got, " -p- ") || strings.Contains(got, "--top-ports") {
+		t.Errorf("all ports: %s", got)
+	}
+	if IsAllPorts(all[1:]) || IsAllPorts([]int{1, 65535}) {
+		t.Error("partial lists are not all ports")
+	}
+}
