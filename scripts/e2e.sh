@@ -216,6 +216,11 @@ PY
     curl -fsS -c "$jar" -b "$jar" -o /dev/null -d "login=admin" --data-urlencode "password=${ASI_SEED_PASSWORD_ADMIN}" "$base/login"
     curl -fsS -b "$jar" "$base/scans" | grep -q -- "-p-" || fail "/scans does not show the port profile"
     curl -fsS -b "$jar" "$base/scans/new" | grep -q 'name="port_profile"' || fail "/scans/new has no port profile field"
+    log "asset history of $ip:8787 shows seen, missing, seen"
+    local seq
+    seq=$(curl -fsS -b "$jar" "$base/changes/asset?ip=$ip&port=8787&proto=tcp" | grep -o 'hist-sq hist-[a-z]*' | sed 's/hist-sq hist-//' | tr '\n' ' ')
+    echo "history $ip:8787: $seq"
+    case " $seq" in *" seen miss seen "*) ;; *) fail "/changes/asset for $ip:8787: '$seq' (want seen miss seen)" ;; esac
   fi
   log "E2E AGH-TEMPLATE OK (mode $amode: run1 $r1, run2 $r2 without 8787, run3 $r3 with 8787)"
 }
@@ -308,12 +313,13 @@ for run in run2 run3; do
 done
 
 log "unstable host after run3"
-python3 - "$OUT/verify_run3.json" <<'PY' || fail "unstable host not reported"
+UNSTABLE_IP=10.20.60.120
+python3 - "$OUT/verify_run3.json" "$UNSTABLE_IP" <<'PY' || fail "unstable host not reported"
 import json, sys
 r = json.load(open(sys.argv[1]))
-assert "unstable 10.20.60.120" not in r["changes"].get("missing", []), r["changes"]
+assert "unstable " + sys.argv[2] not in r["changes"].get("missing", []), r["changes"]
 PY
-[ "$(psql_db "SELECT state FROM host_state WHERE ip='10.20.60.120'")" = unstable ] || fail "10.20.60.120 not unstable"
+[ "$(psql_db "SELECT state FROM host_state WHERE ip='$UNSTABLE_IP'")" = unstable ] || fail "$UNSTABLE_IP not unstable"
 
 log "RBAC: viewer gets 403 on a POST"
 VJAR="$OUT/viewer.jar"
@@ -325,6 +331,16 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -b "$VJAR" -d "name=x" "$BASE/scan
 [ "$code" = 403 ] || fail "viewer POST /scans -> $code (want 403)"
 code=$(curl -s -o /dev/null -w '%{http_code}' -b "$VJAR" "$BASE/results")
 [ "$code" = 200 ] || fail "viewer GET /results -> $code (want 200)"
+
+log "change timeline, availability and asset history"
+curl -fsS -b "$VJAR" "$BASE/changes" > "$OUT/changes.html" || fail "GET /changes"
+grep -q '<svg' "$OUT/changes.html" || fail "/changes has no timeline chart"
+bars=$(grep -o 'class="tl-bar"' "$OUT/changes.html" | wc -l | tr -d ' ')
+[ "$bars" -ge 3 ] || fail "/changes timeline has $bars bars (want >= 3)"
+curl -fsS -b "$VJAR" "$BASE/changes/availability" > "$OUT/availability.html" || fail "GET /changes/availability"
+grep -qF "$UNSTABLE_IP" "$OUT/availability.html" || fail "/changes/availability does not list $UNSTABLE_IP"
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$VJAR" "$BASE/changes/asset?ip=$UNSTABLE_IP&port=0")
+[ "$code" = 200 ] || fail "GET /changes/asset for $UNSTABLE_IP -> $code (want 200)"
 
 log "DefectDojo Generic Findings: export, offline validation, re-import"
 asi export dojo > "$OUT/findings.json"

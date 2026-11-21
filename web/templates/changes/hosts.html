@@ -22,7 +22,7 @@
     <td><span class="flips">{{range .Flips}}<span title="przebieg #{{.RunID}}: {{if .Up}}odpowiada{{else}}brak odpowiedzi{{end}}" aria-label="przebieg #{{.RunID}}: {{if .Up}}odpowiada{{else}}brak odpowiedzi{{end}}" class="flip {{if .Up}}up{{else}}down{{end}}"></span>{{end}}</span></td>
     <td>{{fmtTime .FirstSeen}}</td>
     <td>{{fmtTime .LastSeen}}</td>
-    <td><a href="/annotations?ip={{.IP}}">adnotacje</a></td>
+    <td><a href="/changes/asset?{{keyQuery (hostKey .IP)}}">historia</a> · <a href="/annotations?ip={{.IP}}">adnotacje</a></td>
   </tr>
   {{end}}
   </tbody>

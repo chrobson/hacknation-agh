@@ -1,0 +1,40 @@
+{{define "title"}}Dostępność i pora dnia · Attack Surface Intelligence{{end}}
+{{define "content"}}
+<h1>Dostępność i pora dnia</h1>
+<p class="hint">
+  Przebieg <strong>obejmuje</strong> adres, gdy jest to zakończony skan (nie import) z zakończonym fragmentem zakresu zawierającym ten adres.
+  <strong>Dostępność</strong> to liczba przebiegów, w których host odpowiadał (lub usługa była wykryta), podzielona przez liczbę przebiegów obejmujących adres, spośród ostatnich {{.Runs}} skanów.
+  Pory dnia liczone są od godziny rozpoczęcia przebiegu w czasie lokalnym: 00-06, 06-12, 12-18, 18-24.
+  Wzorzec <strong>pora dnia</strong> oznacza, że co najmniej dwie pory mają po 2 lub więcej przebiegów, w jednej zasób odpowiada w co najmniej 80% z nich, a w innej w najwyżej 20%. Pozostałe wzorce: <strong>zawsze</strong> (100%), <strong>nigdy</strong> (0%) i <strong>nieregularnie</strong>.
+</p>
+<nav class="filters">
+  <a href="/changes/availability?runs={{.Runs}}{{if .All}}&amp;all=1{{end}}"{{if eq .Tab "hosts"}} class="active"{{end}}>Hosty</a>
+  <a href="/changes/availability?tab=services&amp;runs={{.Runs}}{{if .All}}&amp;all=1{{end}}"{{if eq .Tab "services"}} class="active"{{end}}>Usługi</a>
+  ·
+  {{if .All}}<a href="/changes/availability?tab={{.Tab}}&amp;runs={{.Runs}}">tylko poniżej 100%</a>
+  {{else}}<a href="/changes/availability?tab={{.Tab}}&amp;runs={{.Runs}}&amp;all=1">pokaż wszystkie</a>{{end}}
+</nav>
+{{if .Rows}}
+<table class="grid">
+  <thead><tr>
+    <th>Adres</th><th>Dostępność</th>
+    <th>00-06</th><th>06-12</th><th>12-18</th><th>18-24</th>
+    <th>Wzorzec</th><th></th>
+  </tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr>
+    <td><code>{{keyStr .Key}}</code></td>
+    <td class="num">{{.Seen}}/{{.Total}} ({{.Percent}}%)</td>
+    {{range .Bands}}<td class="num band-{{.Level}}">{{if .Total}}{{.Seen}}/{{.Total}}{{else}}—{{end}}</td>{{end}}
+    <td>{{.Pattern}}{{with .Label}}<br><small>{{.}}</small>{{end}}</td>
+    <td><a href="/changes/asset?{{keyQuery .Key}}&amp;runs={{$.Runs}}">historia</a></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p>{{if .All}}Brak zasobów objętych zakończonymi skanami.{{else}}Wszystkie zasoby odpowiadały we wszystkich przebiegach, które je obejmowały.{{end}}</p>
+{{end}}
+{{if and (not .All) .Hidden}}<p class="hint">Ukryto {{.Hidden}} zasobów z dostępnością 100% lub bez przebiegów obejmujących.</p>{{end}}
+{{end}}

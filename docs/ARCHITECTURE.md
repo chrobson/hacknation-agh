@@ -34,6 +34,13 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export | seed-
   Administrator tworzy nowe role w interfejsie (checkboxy uprawnień).
 - **Host niestabilny/nieaktywny** (konfigurowalne): `inactive` po `ASI_INACTIVE_AFTER_MISSES=3` kolejnych brakach odpowiedzi; `unstable`, gdy w ostatnich `ASI_UNSTABLE_WINDOW=5` przebiegach stan zmienił się co najmniej `ASI_UNSTABLE_IF_FLIPS=2` razy.
 - **Usługa niestabilna**: ta sama reguła dla klucza usługi, liczona z zapisanych zmian `new`/`gone` (bez osobnej tabeli): gdy usługa znika lub wraca w bieżącym przebiegu, a razem z poprzednimi `ASI_UNSTABLE_WINDOW-2` przebiegami daje to co najmniej `ASI_UNSTABLE_IF_FLIPS` przejść, powstaje zmiana `unstable` z portem (pole `flips`). Usługi hosta, który sam jest `unstable` w tym przebiegu, nie dostają osobnego zdarzenia.
+- **Dostępność i pora dnia** (strony **Zmiany** → **Dostępność** i historia zasobu, tylko odczyt istniejących tabel, bez agregatów):
+  - przebieg **obejmuje** adres, gdy jest zakończonym skanem (`kind='scan' AND status='done'`) i ma chunk `status='done' AND cidr >>= ip`; importy nigdy się nie liczą;
+  - host jest **widoczny** w przebiegu, gdy `host_obs(run_id, ip).up`; usługa, gdy przebieg ma wiersz `services` z kluczem (ip, port, proto, vhost);
+  - **dostępność** = widoczny / przebiegi obejmujące, spośród ostatnich N zakończonych skanów (domyślnie 30, `?runs=` 5..100);
+  - **pory dnia** według `started_at` przebiegu w czasie lokalnym procesu (`TZ` z `ASI_TZ`): 00-06, 06-12, 12-18, 18-24;
+  - **wzorzec**: „zawsze” (100%), „nigdy” (0%), „pora dnia”, gdy co najmniej dwie pory mają po ≥ 2 przebiegi obejmujące, w jednej odsetek ≥ 80%, a w innej ≤ 20% (etykieta „odpowiada głównie w godz. 06-18”, sąsiednie pory łączone, także przez północ), w pozostałych przypadkach „nieregularnie”.
+  Odsetek widoczności odpowiada na pytanie, po ilu nieudanych skanach uznać host za nieaktywny: host z wzorcem „pora dnia” nie jest wyłączony, tylko skanowany w złych godzinach. Wykres zmian w czasie (`/changes`) to inline SVG bez JavaScriptu: słupek na przebieg (segmenty według rodzaju zmiany, link do `/changes/{run}`) i linie aktywnych hostów oraz usług.
 
 ## Ocena ciekawości (priorytet analityczny)
 

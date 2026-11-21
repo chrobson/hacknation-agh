@@ -78,11 +78,13 @@ type handler struct {
 	log   *slog.Logger
 }
 
-var pageFiles = []string{"index.html", "run.html", "hosts.html", "annotations.html", "annotation_form.html"}
+var pageFiles = []string{"index.html", "run.html", "hosts.html", "annotations.html", "annotation_form.html", "asset.html", "availability.html"}
 
 // Mount registers the changes, host state and annotation routes:
 //
 //	GET  /changes             runs with change counts        results.read
+//	GET  /changes/availability availability and time of day  results.read
+//	GET  /changes/asset       history of one asset key       results.read
 //	GET  /changes/{run}       changes of one run by kind     results.read
 //	GET  /host-states         host lifecycle states          results.read
 //	GET  /annotations         all annotations                results.read
@@ -153,6 +155,9 @@ func (h *handler) routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(h.auth.require(PermRead))
 		r.Get("/changes", h.index)
+		// Static paths before /changes/{run}, which would reject them as run ids.
+		r.Get("/changes/availability", h.availability)
+		r.Get("/changes/asset", h.asset)
 		r.Get("/changes/{run}", h.run)
 		r.Get("/host-states", h.hosts)
 		r.Get("/annotations", h.annotations)
@@ -194,6 +199,7 @@ type indexData struct {
 	Kinds       []model.ChangeKind
 	StateCounts map[model.HostStateKind]int
 	States      []model.HostStateKind
+	Chart       Chart
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -207,8 +213,14 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err)
 		return
 	}
+	series, err := store.RunSeries(r.Context(), h.d.DB, ChartRuns)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
 	h.render(w, "index.html", "base", http.StatusOK, indexData{
 		Runs: runs, Kinds: KindOrder, StateCounts: counts, States: hostStates,
+		Chart: BuildChart(series),
 	})
 }
 
@@ -626,6 +638,8 @@ var funcs = template.FuncMap{
 		return f
 	},
 	"keyStr":   KeyString,
+	"hostKey":  func(ip netip.Addr) model.AssetKey { return model.AssetKey{IP: ip} },
+	"f1":       func(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) },
 	"keyQuery": keyQuery,
 	"keyID":    keyID,
 	"countOf":  func(m map[model.ChangeKind]int, k model.ChangeKind) int { return m[k] },

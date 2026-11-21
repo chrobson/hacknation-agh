@@ -79,5 +79,11 @@
   {{with $.Data.Legacy}}<p>Przestarzałe protokoły: TLS 1.0 {{if .TLS10}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}, TLS 1.1 {{if .TLS11}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}.</p>{{end}}
 </section>
 {{end}}
+{{with .Service}}
+<section class="card">
+  <h2>Historia</h2>
+  <p><a href="/changes/asset?ip={{.IP}}&amp;port={{.Port}}&amp;proto={{.Proto}}&amp;vhost={{q .VHost}}">Historia usługi w kolejnych przebiegach</a></p>
+</section>
+{{end}}
 {{end}}{{end}}
 {{template "base" .}}

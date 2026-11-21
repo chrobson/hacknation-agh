@@ -30,7 +30,7 @@
     {{$kind := .Kind}}
     {{range .Rows}}
     <tr>
-      <td><code>{{keyStr .Key}}</code></td>
+      <td><code>{{keyStr .Key}}</code> <a class="hist-link" href="/changes/asset?{{keyQuery .Key}}">historia</a></td>
       {{if eq $kind "changed"}}<td>{{fieldLabel .Field}}</td><td>{{with .Old}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td><td>{{with .New}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
       {{else if eq $kind "gone"}}<td>{{with .Old}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
       {{else if eq $kind "new"}}<td>{{with .New}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>

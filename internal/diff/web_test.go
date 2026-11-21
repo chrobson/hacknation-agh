@@ -49,7 +49,33 @@ func TestTemplatesRender(t *testing.T) {
 			Kinds:       KindOrder,
 			StateCounts: map[model.HostStateKind]int{model.HostUnstable: 1},
 			States:      hostStates,
-		}, []string{"Zmiany między przebiegami", `href="/changes/2"`, "#1", "niestabilny"}},
+			Chart: BuildChart([]store.RunPoint{
+				{RunID: 1, StartedAt: now, HostsUp: 3, Services: 5},
+				{RunID: 2, StartedAt: now, HostsUp: 3, Services: 8, Counts: map[model.ChangeKind]int{model.ChangeNew: 3}},
+			}),
+		}, []string{"Zmiany między przebiegami", `href="/changes/2"`, "#1", "niestabilny",
+			"Zmiany w czasie", "<svg", `class="tl-bar"`, `tl-seg kind-new`, "<title>przebieg #2", `class="tl-swatch kind-gone"`}},
+		{"index.html", "base", indexData{Kinds: KindOrder, States: hostStates, Chart: BuildChart(nil)},
+			[]string{"potrzebne są co najmniej dwa przebiegi"}},
+		{"availability.html", "base", availabilityData{Tab: "hosts", Runs: 30, Hidden: 4, Rows: []AvailabilityRow{
+			{Key: model.AssetKey{IP: ip("10.20.60.120")}, Availability: Analyze([]Sample{
+				{At: time.Date(2026, 11, 1, 10, 0, 0, 0, time.Local), Seen: true},
+				{At: time.Date(2026, 11, 2, 10, 0, 0, 0, time.Local), Seen: true},
+				{At: time.Date(2026, 11, 1, 23, 0, 0, 0, time.Local)},
+				{At: time.Date(2026, 11, 2, 23, 0, 0, 0, time.Local)},
+			}, time.Local, 2)},
+		}}, []string{"Dostępność i pora dnia", "10.20.60.120", "2/4 (50%)", "pora dnia", "06-12", "band-hi", "band-lo",
+			`href="/changes/asset?ip=10.20.60.120&amp;port=0`, "Ukryto 4", "obejmuje", `class="active">Hosty`}},
+		{"asset.html", "base", assetData{Key: k, Runs: 30, Hist: store.AssetTimeline{Key: k,
+			Runs: []store.AssetRun{
+				{RunID: 1, StartedAt: now, Covered: true, Seen: true, Product: "nginx", Version: "1.27.3", HTTPStatus: 200, HTTPTitle: "Witaj"},
+				{RunID: 2, StartedAt: now, Covered: true},
+				{RunID: 3, StartedAt: now},
+			},
+			Changes: cs[:1]},
+			Avail: Analyze([]Sample{{At: now, Seen: true}, {At: now}}, time.Local, 2)},
+			[]string{"Historia: <code>10.20.0.10:80/tcp", "hist-sq hist-seen", "hist-sq hist-miss", "hist-sq hist-nc",
+				"nginx 1.27.3", "200 · Witaj", "1/2", "1.26.2", "nieregularnie"}},
 		{"run.html", "base", runData{
 			Run: store.ChangeRun{RunID: 2, PrevRunID: 1, Applied: true}, Total: len(cs),
 			Groups:  GroupChanges(cs, map[model.AssetKey]store.Annotation{k: ann}),
@@ -99,7 +125,7 @@ func TestRoutesFailClosedAndPermissions(t *testing.T) {
 	// Zero Access: every route is forbidden (no DB is touched).
 	r := chi.NewRouter()
 	testHandler(t, Access{}).routes(r)
-	for _, p := range []string{"/changes", "/changes/1", "/host-states", "/annotations", "/annotations/cell?ip=1.2.3.4", "/annotations/edit?ip=1.2.3.4"} {
+	for _, p := range []string{"/changes", "/changes/1", "/changes/availability", "/changes/asset?ip=1.2.3.4&port=0", "/host-states", "/annotations", "/annotations/cell?ip=1.2.3.4", "/annotations/edit?ip=1.2.3.4"} {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusForbidden {
@@ -146,6 +172,34 @@ func TestRoutesFailClosedAndPermissions(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/changes/abc", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("bad run id: %d", rec.Code)
+	}
+	// /changes/asset validates the key before the DB; a bad key answers 400
+	// from the asset handler, not "Nieprawidłowy numer przebiegu".
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/changes/asset?ip=nope", nil))
+	if rec.Code != http.StatusBadRequest || strings.Contains(rec.Body.String(), "przebiegu") {
+		t.Errorf("asset bad key: %d %q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStaticChangesRoutesBeforeRunID(t *testing.T) {
+	// /changes/availability and /changes/asset must reach their own handlers,
+	// not /changes/{run}. Route matching is checked without touching the DB.
+	r := chi.NewRouter()
+	testHandler(t, Access{}).routes(r)
+	for path, want := range map[string]string{
+		"/changes/availability": "/changes/availability",
+		"/changes/asset":        "/changes/asset",
+		"/changes/7":            "/changes/{run}",
+	} {
+		rctx := chi.NewRouteContext()
+		if !r.Match(rctx, http.MethodGet, path) {
+			t.Errorf("%s: no route", path)
+			continue
+		}
+		if got := rctx.RoutePattern(); got != want {
+			t.Errorf("%s matched %q, want %q", path, got, want)
+		}
 	}
 }
 

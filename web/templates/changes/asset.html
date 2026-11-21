@@ -1,0 +1,70 @@
+{{define "title"}}Historia {{keyStr .Key}} · Attack Surface Intelligence{{end}}
+{{define "content"}}
+<p><a href="/changes/availability{{if .Key.Port}}?tab=services{{end}}">&larr; Dostępność</a></p>
+<h1>Historia: <code>{{keyStr .Key}}</code></h1>
+
+<section class="card">
+  <h2>Kolejne przebiegi</h2>
+  {{if .Hist.Runs}}
+  <div class="hist-strip">{{range .Hist.Runs}}<a href="/changes/{{.RunID}}" class="flip hist-sq {{if .Seen}}hist-seen{{else if .Covered}}hist-miss{{else}}hist-nc{{end}}" title="przebieg #{{.RunID}}, {{fmtTime .StartedAt}}: {{if .Seen}}widoczny{{else if .Covered}}brak{{else}}poza zakresem skanu{{end}}" aria-label="przebieg #{{.RunID}}: {{if .Seen}}widoczny{{else if .Covered}}brak{{else}}poza zakresem skanu{{end}}"></a>{{end}}</div>
+  <p class="hint hist-legend"><span class="flip hist-seen"></span> widoczny <span class="flip hist-miss"></span> brak w przebiegu obejmującym adres <span class="flip hist-nc"></span> przebieg nie obejmował adresu</p>
+  {{with .Avail}}
+  <p>
+    Dostępność: <strong>{{.Seen}}/{{.Total}}</strong>{{if .Total}} ({{.Percent}}%){{end}} w ostatnich {{$.Runs}} skanach.
+    Wzorzec: <strong>{{.Pattern}}</strong>{{with .Label}} ({{.}}){{end}}.
+  </p>
+  <table class="grid hist-bands">
+    <thead><tr><th>Pora dnia</th>{{range .Bands}}<th>{{printf "%02d" .From}}-{{printf "%02d" .To}}</th>{{end}}</tr></thead>
+    <tbody><tr><td>widoczny / przebiegi</td>{{range .Bands}}<td class="num band-{{.Level}}">{{if .Total}}{{.Seen}}/{{.Total}}{{else}}—{{end}}</td>{{end}}</tr></tbody>
+  </table>
+  {{end}}
+  <p class="hint">Liczone są tylko zakończone skany (nie importy), których zakończony fragment zakresu zawiera ten adres. {{if .Key.Port}}Usługa jest widoczna, gdy przebieg zapisał ją pod tym samym adresem, portem, protokołem i vhostem.{{else}}Host jest widoczny, gdy odpowiadał w przebiegu.{{end}}</p>
+  {{else}}
+  <p>Brak zakończonych skanów.</p>
+  {{end}}
+</section>
+
+{{if .Hist.Runs}}
+<section>
+  <h2>Szczegóły przebiegów</h2>
+  <table class="grid">
+    <thead><tr><th>Przebieg</th><th>Rozpoczęty</th><th>Stan</th>{{if .Key.Port}}<th>Produkt i wersja</th><th>HTTP</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Hist.Runs}}
+    <tr>
+      <td><a href="/changes/{{.RunID}}">#{{.RunID}}</a></td>
+      <td>{{fmtTime .StartedAt}}</td>
+      <td>{{if .Seen}}widoczny{{else if .Covered}}<span class="bad">brak</span>{{else}}<span class="muted">poza zakresem</span>{{end}}</td>
+      {{if $.Key.Port}}
+      <td>{{if or .Product .Version}}{{.Product}} {{.Version}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{if .HTTPStatus}}{{.HTTPStatus}}{{with .HTTPTitle}} · {{.}}{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+      {{end}}
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+<section>
+  <h2>Zmiany tego zasobu</h2>
+  {{if .Hist.Changes}}
+  <table class="grid">
+    <thead><tr><th>Przebieg</th><th>Rodzaj</th><th>Pole</th><th>Było</th><th>Jest</th></tr></thead>
+    <tbody>
+    {{range .Hist.Changes}}
+    <tr>
+      <td><a href="/changes/{{.RunID}}">#{{.RunID}}</a></td>
+      <td><span class="badge kind-{{.Kind}}">{{kindShort .Kind}}</span></td>
+      <td>{{with .Field}}{{fieldLabel .}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{with .Old}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{with .New}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>Brak zapisanych zmian.</p>
+  {{end}}
+</section>
+{{end}}

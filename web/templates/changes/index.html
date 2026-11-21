@@ -9,6 +9,33 @@
   {{end}}</ul>
 </section>
 
+<section class="tl-section">
+  <h2>Zmiany w czasie</h2>
+  {{if .Chart.Enough}}
+  <svg class="tl" viewBox="0 0 720 200" role="img" aria-label="Liczba zmian w kolejnych przebiegach skanu">
+    <line class="tl-axis" x1="40" y1="{{f1 .Chart.Bottom}}" x2="710" y2="{{f1 .Chart.Bottom}}"/>
+    <text class="tl-scale" x="36" y="{{f1 .Chart.Top}}" text-anchor="end" dominant-baseline="hanging">{{.Chart.MaxChanges}}</text>
+    <text class="tl-scale" x="36" y="{{f1 .Chart.Bottom}}" text-anchor="end">0</text>
+    {{range .Chart.Bars}}{{$b := .}}<a class="tl-bar" href="/changes/{{.RunID}}"><title>{{.Title}}</title>
+      <rect class="tl-slot" x="{{f1 .SlotX}}" y="0" width="{{f1 .SlotW}}" height="200"/>
+      {{range .Segments}}<rect class="tl-seg kind-{{.Kind}}" x="{{f1 $b.X}}" y="{{f1 .Y}}" width="{{f1 $b.W}}" height="{{f1 .H}}"/>{{end}}
+      <text class="tl-label" x="{{f1 .LabelX}}" y="188" text-anchor="middle">#{{.RunID}}</text>
+    </a>
+    {{end}}
+    <polyline class="tl-line tl-hosts" points="{{.Chart.HostsLine}}"/>
+    <polyline class="tl-line tl-services" points="{{.Chart.ServicesLine}}"/>
+  </svg>
+  <ul class="tl-legend">
+    {{range .Kinds}}<li><span class="tl-swatch kind-{{.}}"></span>{{kindShort .}}</li>{{end}}
+    <li><span class="tl-swatch tl-hosts"></span>hosty aktywne (linia, skala {{.Chart.MaxAssets}})</li>
+    <li><span class="tl-swatch tl-services"></span>usługi (linia)</li>
+  </ul>
+  <p class="hint">Słupek to liczba zmian w przebiegu (kliknij, aby zobaczyć szczegóły), linie to liczba aktywnych hostów i wykrytych usług. Pod uwagę brane są zakończone skany, bez importów.</p>
+  {{else}}
+  <p class="hint">Wykres pojawi się po kolejnym skanie: potrzebne są co najmniej dwa przebiegi.</p>
+  {{end}}
+</section>
+
 <section>
   <h2>Przebiegi</h2>
   {{if .Runs}}
