@@ -87,7 +87,7 @@ Administrator tworzy własne role (checkboxy uprawnień) w **Administracja → R
 
 - Allowlista sieci `ASI_ALLOWED_CIDRS` sprawdzana przy imporcie celów, przy imporcie wyników i ponownie tuż przed uruchomieniem nmapa. `ASI_SCAN_EXCLUDE` to adresy zawsze pomijane.
 - Porty: profil konfiguracji skanu (automatyczny, najpopularniejsze + dodatkowe, własna lista `22,80,8000-8100`, wszystkie `-p-`; zob. wyżej). `ASI_SCAN_PORTS` ogranicza wszystkie skany do listy dozwolonych portów.
-- Tempo: `max_rate` pakietów/s na cały skan (1 do `ASI_MAX_RATE`, domyślnie 5000), dzielone równo między wątki. Fingerprinting HTTP jest ograniczony do 20 żądań/s, tylko GET/HEAD, bez prób logowania.
+- Tempo: `max_rate` pakietów/s na cały skan (1 do `ASI_MAX_RATE`, domyślnie 5000), dzielone równo między wątki. Fingerprinting HTTP jest ograniczony do 20 żądań/s, tylko GET/HEAD, bez prób logowania. Timeout pojedynczego żądania HTTP to `ASI_HTTP_TIMEOUT` (domyślnie `10s`, wystarcza przy opóźnieniu 500 ms+, limitach przepustowości i `slow_close`), a `ASI_HTTP_RETRIES` (domyślnie 1, 0–3) ponawia żądanie po przekroczeniu czasu lub zerwanym połączeniu. Czas odpowiedzi każdej usługi HTTP jest zapisywany i widoczny w wynikach; zmiana o więcej niż max(300 ms, 2×) między przebiegami trafia do diffu.
 - Okna czasowe i częstotliwość w konfiguracji skanu: skan przerwany na końcu okna wraca do kolejki i jest wznawiany w następnym oknie. Czas lokalny kontenera ustawia `ASI_TZ` (domyślnie Europe/Warsaw).
 - „Zatrzymaj” zatrzymuje przebieg na stałe. Harmonogram wznowi go dopiero po kliknięciu „Wznów”.
 - Logowanie: po 5 nieudanych próbach w ciągu 15 minut (na login albo adres) kolejne próby dostają 429.

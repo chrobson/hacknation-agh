@@ -1,0 +1,13 @@
+id: vsftpd
+name: vsftpd
+category: server
+confidence: 90
+severity: low
+description: Serwer vsftpd z wersją z banera nmapa. Wersje starsze niż 3.0 (m.in. 2.3.4 z backdoorem) są oznaczane jako nieaktualne. Bez prób logowania.
+condition: or
+outdated:
+  below: "3.0"
+  severity: high
+matchers:
+  - type: service
+    product: '(?i)\bvsftpd(?: (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?))?'

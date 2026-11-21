@@ -1,0 +1,14 @@
+id: toxiproxy-api
+name: API Toxiproxy bez uwierzytelnienia
+category: admin-panel
+confidence: 90
+severity: high
+description: API sterujące Toxiproxy (domyślnie port 8474). Bez uwierzytelnienia pozwala dodawać opóźnienia, limity i zrywanie połączeń dla przekierowanych usług. Strona główna API zwraca 404, więc /proxies (lista proxy z polami name/listen) jest odpytywane tylko wtedy; wyłącznie GET.
+condition: and
+matchers:
+  - type: status
+    status: [404]
+  - type: path
+    path: /proxies
+    status: [200]
+    regex: '^\s*\{\s*(?:\}|"[^"]+"\s*:\s*\{\s*"name"\s*:\s*"[^"]*"\s*,\s*"listen"\s*:)'

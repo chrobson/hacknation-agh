@@ -40,6 +40,8 @@ type Config struct {
 	// 65535 TCP ports (-p-) when its targets total at most this many
 	// addresses (ASI_ALL_PORTS_MAX_ADDRS, default 16; 0 disables).
 	AllPortsMaxAddrs int
+	HTTPTimeout      time.Duration // ASI_HTTP_TIMEOUT, per-request timeout of HTTP fingerprinting, default 10s
+	HTTPRetries      int           // ASI_HTTP_RETRIES, retries after a timeout or dropped connection, default 1 (0 = none)
 }
 
 // UnstableConfig defines host instability across runs.
@@ -174,6 +176,15 @@ func Load() (Config, error) {
 	}
 	if c.TickEvery, err = time.ParseDuration(env("ASI_TICK_EVERY", "1m")); err != nil {
 		return c, fmt.Errorf("ASI_TICK_EVERY: %w", err)
+	}
+	if c.HTTPTimeout, err = time.ParseDuration(env("ASI_HTTP_TIMEOUT", "10s")); err != nil || c.HTTPTimeout <= 0 {
+		return c, fmt.Errorf("ASI_HTTP_TIMEOUT: must be a positive duration such as 10s")
+	}
+	if c.HTTPRetries, err = envInt("ASI_HTTP_RETRIES", 1); err != nil {
+		return c, err
+	}
+	if c.HTTPRetries < 0 || c.HTTPRetries > 3 {
+		return c, fmt.Errorf("ASI_HTTP_RETRIES must be 0-3")
 	}
 	if k := os.Getenv("ASI_SECRET_KEY"); k != "" {
 		if c.SecretKey, err = parseHexKey(k); err != nil {

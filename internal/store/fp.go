@@ -50,35 +50,42 @@ func SaveHTTPObs(ctx context.Context, q FPQuerier, o model.HTTPObs) error {
 			return err
 		}
 	}
-	var status *int
+	var status, responseMS *int
 	if o.Status != 0 {
 		status = &o.Status
 	}
+	if o.ResponseMS > 0 {
+		responseMS = &o.ResponseMS
+	}
 	_, err = q.Exec(ctx, `
-INSERT INTO http_obs (service_id, url, status, title, headers, cookies, redirects, tls, favicon_mmh3, body_sha256)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO http_obs (service_id, url, status, title, headers, cookies, redirects, tls, favicon_mmh3, body_sha256, response_ms)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (service_id) DO UPDATE SET
     url = EXCLUDED.url, status = EXCLUDED.status, title = EXCLUDED.title,
     headers = EXCLUDED.headers, cookies = EXCLUDED.cookies, redirects = EXCLUDED.redirects,
-    tls = EXCLUDED.tls, favicon_mmh3 = EXCLUDED.favicon_mmh3, body_sha256 = EXCLUDED.body_sha256`,
-		o.ServiceID, o.URL, status, o.Title, headers, cookies, redirects, tlsJSON, o.FaviconMMH3, o.BodySHA256)
+    tls = EXCLUDED.tls, favicon_mmh3 = EXCLUDED.favicon_mmh3, body_sha256 = EXCLUDED.body_sha256,
+    response_ms = EXCLUDED.response_ms`,
+		o.ServiceID, o.URL, status, o.Title, headers, cookies, redirects, tlsJSON, o.FaviconMMH3, o.BodySHA256, responseMS)
 	return err
 }
 
 // GetHTTPObs loads the stored observation of a service (Body is always nil).
 func GetHTTPObs(ctx context.Context, q FPQuerier, serviceID int64) (model.HTTPObs, error) {
 	o := model.HTTPObs{ServiceID: serviceID}
-	var status *int
+	var status, responseMS *int
 	var headers, cookies, redirects, tlsJSON []byte
 	err := q.QueryRow(ctx, `
-SELECT url, status, title, headers, cookies, redirects, tls, favicon_mmh3, body_sha256
+SELECT url, status, title, headers, cookies, redirects, tls, favicon_mmh3, body_sha256, response_ms
 FROM http_obs WHERE service_id = $1`, serviceID).
-		Scan(&o.URL, &status, &o.Title, &headers, &cookies, &redirects, &tlsJSON, &o.FaviconMMH3, &o.BodySHA256)
+		Scan(&o.URL, &status, &o.Title, &headers, &cookies, &redirects, &tlsJSON, &o.FaviconMMH3, &o.BodySHA256, &responseMS)
 	if err != nil {
 		return o, err
 	}
 	if status != nil {
 		o.Status = *status
+	}
+	if responseMS != nil {
+		o.ResponseMS = *responseMS
 	}
 	if err := json.Unmarshal(headers, &o.Headers); err != nil {
 		return o, fmt.Errorf("headers: %w", err)

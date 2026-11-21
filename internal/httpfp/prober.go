@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -27,7 +28,11 @@ import (
 
 // Defaults for Options.
 const (
+	// DefaultTimeout tolerates slow links (e.g. 500 ms+ injected latency in
+	// each direction, bandwidth limits or a slow connection close).
 	DefaultTimeout      = 10 * time.Second
+	DefaultRetries      = 1
+	DefaultRetryBackoff = 250 * time.Millisecond
 	DefaultMaxRedirects = 5
 	DefaultMaxBody      = 2 << 20 // 2 MB
 	DefaultUserAgent    = "asi-fingerprint/1.0 (+attack-surface-inventory)"
@@ -45,6 +50,12 @@ var ErrNotAllowed = errors.New("httpfp: address outside the allowed networks")
 type Options struct {
 	// Timeout bounds every single request (connect + TLS + headers + body).
 	Timeout time.Duration
+	// Retries is how many times a request that failed with a timeout or a
+	// dropped connection is repeated (0 = DefaultRetries, negative = none).
+	// A refused connection or a rejected address is never retried.
+	Retries int
+	// RetryBackoff is the pause before a retry (0 = DefaultRetryBackoff).
+	RetryBackoff time.Duration
 	// MaxRedirects is the maximum number of redirect hops followed (<=5).
 	MaxRedirects int
 	// MaxBody caps the bytes read from a response body (<=2 MB).
@@ -83,6 +94,17 @@ func New(opt Options) *HTTPProber {
 	if opt.Timeout <= 0 {
 		opt.Timeout = DefaultTimeout
 	}
+	switch {
+	case opt.Retries == 0:
+		opt.Retries = DefaultRetries
+	case opt.Retries < 0:
+		opt.Retries = 0
+	case opt.Retries > 3:
+		opt.Retries = 3
+	}
+	if opt.RetryBackoff <= 0 {
+		opt.RetryBackoff = DefaultRetryBackoff
+	}
 	if opt.MaxRedirects <= 0 || opt.MaxRedirects > DefaultMaxRedirects {
 		opt.MaxRedirects = DefaultMaxRedirects
 	}
@@ -110,6 +132,8 @@ type Response struct {
 	Cookies []*http.Cookie
 	Body    []byte
 	TLS     *tls.ConnectionState
+	// Duration of the successful attempt: connect, TLS, headers and body.
+	Duration time.Duration
 }
 
 // target describes where requests for one endpoint go.
@@ -221,6 +245,7 @@ func (p *HTTPProber) fetch(ctx context.Context, c *http.Client, method, rawURL s
 	}
 	req.Header.Set("User-Agent", p.opt.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+	start := time.Now()
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
@@ -231,13 +256,51 @@ func (p *HTTPProber) fetch(ctx context.Context, c *http.Client, method, rawURL s
 		return nil, err
 	}
 	return &Response{
-		URL:     rawURL,
-		Status:  resp.StatusCode,
-		Header:  resp.Header,
-		Cookies: resp.Cookies(),
-		Body:    body,
-		TLS:     resp.TLS,
+		URL:      rawURL,
+		Status:   resp.StatusCode,
+		Header:   resp.Header,
+		Cookies:  resp.Cookies(),
+		Body:     body,
+		TLS:      resp.TLS,
+		Duration: time.Since(start),
 	}, nil
+}
+
+// fetchRetry is fetch with Options.Retries retries after transient errors
+// (timeouts, resets, a connection closed early).
+func (p *HTTPProber) fetchRetry(ctx context.Context, c *http.Client, method, rawURL string, limit int64, extra http.Header) (*Response, error) {
+	resp, err := p.fetch(ctx, c, method, rawURL, limit, extra)
+	for i := 0; i < p.opt.Retries && err != nil && retryable(ctx, rawURL, err); i++ {
+		t := time.NewTimer(p.opt.RetryBackoff)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return nil, err
+		case <-t.C:
+		}
+		resp, err = p.fetch(ctx, c, method, rawURL, limit, extra)
+	}
+	return resp, err
+}
+
+// retryable reports transient request errors worth one more attempt.
+func retryable(ctx context.Context, rawURL string, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, ErrNotAllowed) || errors.Is(err, ErrMethodNotAllowed) {
+		return false
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return false // nothing listens: retrying cannot help
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	// Handshake failures over TLS are handled by the legacy-TLS retry.
+	if strings.HasPrefix(rawURL, "https:") && isTLSHandshakeError(err) {
+		return false
+	}
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || strings.Contains(err.Error(), "connection reset")
 }
 
 // isSensitiveHeader reports request headers that could carry credentials.
@@ -280,7 +343,7 @@ func (p *HTTPProber) Probe(ctx context.Context, ep model.Endpoint) (model.HTTPOb
 	var last *Response
 	var tlsState *tls.ConnectionState
 	for {
-		resp, err := p.fetch(ctx, c, http.MethodGet, cur, p.opt.MaxBody, nil)
+		resp, err := p.fetchRetry(ctx, c, http.MethodGet, cur, p.opt.MaxBody, nil)
 		if err != nil && !legacyTried && ctx.Err() == nil && !errors.Is(err, ErrNotAllowed) &&
 			strings.HasPrefix(cur, "https:") && isTLSHandshakeError(err) {
 			// Old devices often speak only TLS 1.0/1.1 or RSA-kex/3DES suites,
@@ -298,6 +361,11 @@ func (p *HTTPProber) Probe(ctx context.Context, ep model.Endpoint) (model.HTTPOb
 		}
 		last = resp
 		obs.URL = cur
+		if obs.ResponseMS == 0 {
+			// The first hop answers for this service (later hops may be
+			// another port after a redirect).
+			obs.ResponseMS = max(1, int(resp.Duration.Milliseconds()))
+		}
 		// Only the first hop is this service; a plain-http service that
 		// redirects to https must not inherit the certificate of port 443.
 		if resp.TLS != nil && tlsState == nil && len(obs.Redirects) == 0 {
@@ -564,5 +632,8 @@ func (p *HTTPProber) FetchPath(ctx context.Context, ip, vhost, baseURL, method, 
 	u = u.ResolveReference(ref)
 	c := p.client(t, nil)
 	defer c.CloseIdleConnections()
-	return p.fetch(ctx, c, method, u.String(), p.opt.MaxBody, hdr)
+	return p.fetchRetry(ctx, c, method, u.String(), p.opt.MaxBody, hdr)
 }
+
+// Timeout returns the per-request timeout in effect.
+func (p *HTTPProber) Timeout() time.Duration { return p.opt.Timeout }

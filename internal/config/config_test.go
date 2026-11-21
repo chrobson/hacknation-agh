@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"testing"
+	"time"
 )
 
 func TestParsePorts(t *testing.T) {
@@ -75,5 +76,30 @@ func TestAllowHosts(t *testing.T) {
 	t.Setenv("ASI_ALLOW_HOSTS", "nope.invalid")
 	if _, err := Load(); err == nil {
 		t.Error("unresolvable ASI_ALLOW_HOSTS must fail")
+	}
+}
+
+func TestHTTPTimeoutAndRetries(t *testing.T) {
+	t.Setenv("ASI_HTTP_TIMEOUT", "")
+	t.Setenv("ASI_HTTP_RETRIES", "")
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.HTTPTimeout != 10*time.Second || c.HTTPRetries != 1 {
+		t.Fatalf("defaults: %v, %d", c.HTTPTimeout, c.HTTPRetries)
+	}
+	t.Setenv("ASI_HTTP_TIMEOUT", "25s")
+	t.Setenv("ASI_HTTP_RETRIES", "0")
+	if c, err = Load(); err != nil || c.HTTPTimeout != 25*time.Second || c.HTTPRetries != 0 {
+		t.Fatalf("custom: %v, %d, %v", c.HTTPTimeout, c.HTTPRetries, err)
+	}
+	for k, v := range map[string]string{"ASI_HTTP_TIMEOUT": "-1s", "ASI_HTTP_RETRIES": "9"} {
+		t.Run(k, func(t *testing.T) {
+			t.Setenv(k, v)
+			if _, err := Load(); err == nil {
+				t.Fatalf("%s=%s accepted", k, v)
+			}
+		})
 	}
 }

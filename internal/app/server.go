@@ -54,7 +54,13 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	if err != nil {
 		d.Log.Warn("some signatures failed to load", "err", err)
 	}
+	retries := cfg.HTTPRetries
+	if retries == 0 {
+		retries = -1 // httpfp: 0 means the default, negative disables retries
+	}
 	c.Prober = httpfp.New(httpfp.Options{
+		Timeout:   cfg.HTTPTimeout,
+		Retries:   retries,
 		Limiter:   rate.NewLimiter(rate.Limit(HTTPProbeRate), 5),
 		Allow:     c.Allow.AllowsAddr,
 		UserAgent: "asi-discovery/1.0 (+security inventory scan)",

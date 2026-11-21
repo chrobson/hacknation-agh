@@ -612,6 +612,7 @@ var stateLabels = map[model.HostStateKind]string{
 var fieldLabels = map[string]string{
 	"product": "produkt", "version": "wersja", "extrainfo": "informacje dodatkowe",
 	"cpe": "CPE", "banner": "baner", "flips": "zmiany stanu",
+	LatencyField: "czas odpowiedzi HTTP",
 }
 
 var funcs = template.FuncMap{

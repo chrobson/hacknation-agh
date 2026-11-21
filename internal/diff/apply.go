@@ -99,6 +99,16 @@ func ApplyRunTx(ctx context.Context, tx pgx.Tx, runID int64, cfg Config, now tim
 		res.Changes = Diff(prev, curr, res.Hosts, cfg)
 		if isImport {
 			res.Changes = DropUncarried(res.Changes)
+		} else {
+			// Imports carry no HTTP timing; scans compare response times.
+			lat, err := runLatencies(ctx, tx, runID, res.PrevRunID)
+			if err != nil {
+				return res, fmt.Errorf("response times: %w", err)
+			}
+			if lc := LatencyChanges(prev, curr, lat); len(lc) > 0 {
+				res.Changes = append(res.Changes, lc...)
+				SortChanges(res.Changes)
+			}
 		}
 		for i := range res.Changes {
 			res.Changes[i].RunID = runID

@@ -2,8 +2,11 @@ id: wordpress
 name: WordPress
 category: cms
 confidence: 90
-description: CMS WordPress (meta generator, ścieżki wp-content/wp-includes, nagłówek Link api.w.org, ciasteczka wordpress_*).
+description: CMS WordPress (meta generator, ścieżki wp-content/wp-includes, nagłówek Link api.w.org, ciasteczka wordpress_*). Wersja z meta generator, z parametru ver= arkuszy CSS rdzenia albo z /readme.html i kanału /feed/ (tylko GET, tylko po wykryciu WordPressa). Wersja starsza niż 6.0 podnosi poziom do high (nieaktualny rdzeń bez poprawek bezpieczeństwa).
 condition: or
+outdated:
+  below: "6.0"
+  severity: high
 matchers:
   - type: body
     regex: '<meta name="generator" content="WordPress ?(?P<version>[0-9.]*)'
@@ -14,3 +17,16 @@ matchers:
     regex: 'api\.w\.org'
   - type: cookie
     regex: '^wordpress_'
+  - type: body
+    version_only: true
+    regex: '/wp-(?:admin|includes)/css/[a-z0-9_.-]+\.css\?ver=(?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)\b'
+  - type: path
+    path: /readme.html
+    status: [200]
+    version_only: true
+    regex: '(?is)WordPress.*?<br ?/?>\s*Version (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+  - type: path
+    path: /feed/
+    status: [200]
+    version_only: true
+    regex: '<generator>https?://wordpress\.org/\?v=(?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)</generator>'

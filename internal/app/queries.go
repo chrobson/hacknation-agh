@@ -320,6 +320,7 @@ type ServiceRow struct {
 	Status     *int
 	Title      string
 	URL        string
+	ResponseMS *int // HTTP response time of the probe, nil = not measured
 	Detections []DetectionTag
 	Annotation string
 	Severity   string
@@ -332,6 +333,7 @@ type DetectionTag struct {
 	Name       string `json:"name"`
 	Category   string `json:"category"`
 	Confidence int    `json:"confidence"`
+	Severity   string `json:"severity,omitempty"` // signature severity (evidence), e.g. High for an outdated version
 }
 
 // ResultFilter narrows the results list.
@@ -345,9 +347,9 @@ type ResultFilter struct {
 func ListServices(ctx context.Context, db *pgxpool.Pool, f ResultFilter) ([]ServiceRow, error) {
 	rows, err := db.Query(ctx, `
 		SELECT s.id, host(s.ip), s.port, s.proto, s.vhost, COALESCE(h.hostname, ''), s.banner, s.product, s.version, s.extrainfo,
-		       o.status, COALESCE(o.title, ''), COALESCE(o.url, ''),
+		       o.status, COALESCE(o.title, ''), COALESCE(o.url, ''), o.response_ms,
 		       COALESCE((SELECT json_agg(json_build_object('signature', d.signature_id, 'name', d.name, 'category', d.category,
-		                 'confidence', d.confidence) ORDER BY d.confidence DESC, d.signature_id)
+		                 'confidence', d.confidence, 'severity', COALESCE(d.evidence->>'severity', '')) ORDER BY d.confidence DESC, d.signature_id)
 		                 FROM detections d WHERE d.service_id = s.id), '[]'::json),
 		       COALESCE(a.comment, ''), COALESCE(a.severity, ''), COALESCE(a.false_positive, false)
 		FROM services s
@@ -370,7 +372,7 @@ func ListServices(ctx context.Context, db *pgxpool.Pool, f ResultFilter) ([]Serv
 		var s ServiceRow
 		var dets []byte
 		if err := rows.Scan(&s.ID, &s.IP, &s.Port, &s.Proto, &s.VHost, &s.Hostname, &s.Banner, &s.Product, &s.Version, &s.ExtraInfo,
-			&s.Status, &s.Title, &s.URL, &dets, &s.Annotation, &s.Severity, &s.FalsePos); err != nil {
+			&s.Status, &s.Title, &s.URL, &s.ResponseMS, &dets, &s.Annotation, &s.Severity, &s.FalsePos); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(dets, &s.Detections)

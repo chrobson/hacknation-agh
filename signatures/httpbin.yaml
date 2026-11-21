@@ -1,0 +1,14 @@
+id: httpbin
+name: httpbin
+category: other
+confidence: 90
+severity: low
+description: Usługa testowa httpbin (odbija nagłówki i adres klienta, ma /redirect-to). Narzędzie deweloperskie, które nie powinno być wystawione. Wersja ze strony głównej.
+condition: or
+matchers:
+  - type: body
+    regex: '(?s)<pre class="version">\s*(?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*</pre>.*?A simple HTTP Request &(?:amp;)? Response Service'
+  - type: title
+    regex: '(?i)^httpbin(?:\.org)?$'
+  - type: body
+    regex: 'A simple HTTP Request &(?:amp;)? Response Service'
