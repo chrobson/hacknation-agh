@@ -47,6 +47,10 @@ type ScanConfig struct {
 	Enabled      bool
 	Ports        string // explicit TCP port list ("22,80,8000-8100"); "" = TopPorts
 	ExtraPorts   bool   // second pass over scan.DefaultExtraPorts (only without Ports)
+	// PortProfile is auto, top, list or all (see migrations/0800_port_profile.sql
+	// and runner.ResolvePorts); "" is treated as auto, or list when Ports is set.
+	PortProfile   string
+	ExtraPortList string // additional ports of the extra pass (top profile)
 }
 
 // HasWindow reports whether the config restricts scanning to a time window.
@@ -100,13 +104,13 @@ func (s *ScanStore) ResetRunning(ctx context.Context) (int64, error) {
 	return tag.RowsAffected(), tx.Commit(ctx)
 }
 
-const configCols = `id, name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports`
+const configCols = `id, name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports, port_profile, extra_port_list`
 
 func scanConfig(row pgx.Row) (ScanConfig, error) {
 	var c ScanConfig
 	var ws, we pgtype.Time
 	var every pgtype.Int4
-	if err := row.Scan(&c.ID, &c.Name, &c.TargetIDs, &c.TopPorts, &c.MaxRate, &c.Workers, &ws, &we, &every, &c.Enabled, &c.Ports, &c.ExtraPorts); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.TargetIDs, &c.TopPorts, &c.MaxRate, &c.Workers, &ws, &we, &every, &c.Enabled, &c.Ports, &c.ExtraPorts, &c.PortProfile, &c.ExtraPortList); err != nil {
 		return c, err
 	}
 	if ws.Valid {

@@ -78,7 +78,8 @@ func Parse(raw string) (model.Target, error) {
 // NormalizeDomain validates a host name per RFC 1123 (letters, digits and
 // hyphens; labels 1-63 chars not starting or ending with a hyphen; at most
 // 253 chars; at least two labels; the top-level label is not all-numeric)
-// and returns it lower-cased without a trailing dot.
+// and returns it lower-cased without a trailing dot. The single exception to
+// the two-label rule is "localhost" (services published on the scanning host).
 func NormalizeDomain(s string) (string, error) {
 	d := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(s), "."))
 	if d == "" {
@@ -86,6 +87,9 @@ func NormalizeDomain(s string) (string, error) {
 	}
 	if len(d) > maxDomain {
 		return "", fmt.Errorf("%w: longer than %d characters", ErrInvalidDomain, maxDomain)
+	}
+	if d == "localhost" {
+		return d, nil
 	}
 	labels := strings.Split(d, ".")
 	if len(labels) < 2 {

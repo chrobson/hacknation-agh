@@ -346,6 +346,7 @@ type scansData struct {
 type configRow struct {
 	store.ScanConfig
 	TargetsLabel string
+	PortsLabel   string
 	LastRun      *RunRow
 }
 
@@ -368,7 +369,7 @@ func (p *Pages) scans(w http.ResponseWriter, r *http.Request) {
 		d.CanRun = u.Can(auth.PermScansRun)
 	}
 	for _, c := range cfgs {
-		row := configRow{ScanConfig: c, TargetsLabel: "wszystkie cele"}
+		row := configRow{ScanConfig: c, TargetsLabel: "wszystkie cele", PortsLabel: portsLabel(c, p.Deps.Config.AllPortsMaxAddrs)}
 		if len(c.TargetIDs) > 0 {
 			row.TargetsLabel = fmt.Sprintf("%d wybranych", len(c.TargetIDs))
 		}
@@ -397,11 +398,13 @@ type scanFormData struct {
 	Targets      []model.Target
 	MaxRate      int    // ASI_MAX_RATE
 	AllowedPorts string // ASI_SCAN_PORTS as entered, "" = no restriction
+	Profiles     []string
+	AllPortsMax  int // ASI_ALL_PORTS_MAX_ADDRS (auto profile)
 }
 
 func (p *Pages) scanForm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	d := scanFormData{New: true, Config: store.ScanConfig{TopPorts: 1000, MaxRate: min(1000, p.maxRate()), Workers: 4, Enabled: true, ExtraPorts: true}}
+	d := scanFormData{New: true, Config: store.ScanConfig{TopPorts: 1000, MaxRate: min(1000, p.maxRate()), Workers: 4, Enabled: true, ExtraPorts: true, PortProfile: runner.ProfileAuto}}
 	if idS := chi.URLParam(r, "id"); idS != "" {
 		id, err := strconv.ParseInt(idS, 10, 64)
 		if err != nil {
@@ -426,6 +429,8 @@ func (p *Pages) scanForm(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Targets = ts
 	d.MaxRate, d.AllowedPorts = p.maxRate(), config.FormatPorts(p.Deps.Config.ScanPorts)
+	d.Profiles, d.AllPortsMax = runner.Profiles, p.Deps.Config.AllPortsMaxAddrs
+	d.Config.PortProfile = runner.ProfileOf(d.Config)
 	p.render(w, r, "scan_form", http.StatusOK, page{Data: d})
 }
 
@@ -499,6 +504,20 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	extraPorts := r.PostFormValue("extra_ports") != ""
+	profile := strings.TrimSpace(r.PostFormValue("port_profile"))
+	if profile == "" {
+		profile = runner.ProfileOf(store.ScanConfig{Ports: ports})
+	}
+	extraList := strings.TrimSpace(r.PostFormValue("extra_port_list"))
+	if len(extraList) > 2000 {
+		bad(errors.New("lista dodatkowych portów jest za długa"))
+		return
+	}
+	if _, err := runner.ResolvePorts(store.ScanConfig{PortProfile: profile, Ports: ports, ExtraPortList: extraList, ExtraPorts: extraPorts},
+		0, 0, p.Deps.Config.ScanPorts, nil); err != nil {
+		bad(fmt.Errorf("porty: %v", err))
+		return
+	}
 	workers, err := formInt(r, "workers", 4, 1, 64)
 	if err != nil {
 		bad(err)
@@ -550,12 +569,13 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 		return fmt.Sprintf("%02d:%02d", int(d.Hours()), int(d.Minutes())%60)
 	}
 	if id == 0 {
-		err = p.Deps.DB.QueryRow(ctx, `INSERT INTO scan_configs (name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports)
-			VALUES ($1,$2,$3,$4,$5,$6::time,$7::time,$8,$9,$10,$11) RETURNING id`, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts).Scan(&id)
+		err = p.Deps.DB.QueryRow(ctx, `INSERT INTO scan_configs (name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports, port_profile, extra_port_list)
+			VALUES ($1,$2,$3,$4,$5,$6::time,$7::time,$8,$9,$10,$11,$12,$13) RETURNING id`, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts, profile, extraList).Scan(&id)
 	} else {
 		_, err = p.Deps.DB.Exec(ctx, `UPDATE scan_configs SET name=$2, target_ids=$3, top_ports=$4, max_rate=$5, workers=$6,
-			window_start=$7::time, window_end=$8::time, every_minutes=$9, enabled=$10, ports=$11, extra_ports=$12 WHERE id=$1`,
-			id, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts)
+			window_start=$7::time, window_end=$8::time, every_minutes=$9, enabled=$10, ports=$11, extra_ports=$12,
+			port_profile=$13, extra_port_list=$14 WHERE id=$1`,
+			id, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts, profile, extraList)
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "scan_configs_name_key") {
@@ -567,6 +587,30 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(r, "scan_config.save", fmt.Sprintf("scan_config:%d", id), map[string]any{"name": name, "targets": len(ids)})
 	http.Redirect(w, r, "/scans?ok=saved", http.StatusSeeOther)
+}
+
+// portsLabel describes a config's port profile in the scans list.
+func portsLabel(c store.ScanConfig, allMax int) string {
+	switch runner.ProfileOf(c) {
+	case runner.ProfileAll:
+		return "wszystkie (-p-)"
+	case runner.ProfileList:
+		return "lista " + c.Ports
+	case runner.ProfileTop:
+		s := fmt.Sprintf("top %d", c.TopPorts)
+		if c.ExtraPorts {
+			s += " + typowe"
+		}
+		if c.ExtraPortList != "" {
+			s += " + " + c.ExtraPortList
+		}
+		return s
+	default:
+		if allMax > 0 {
+			return fmt.Sprintf("auto: -p- do %d adresów, inaczej top %d", allMax, c.TopPorts)
+		}
+		return fmt.Sprintf("auto: top %d", c.TopPorts)
+	}
 }
 
 // maxRate is the packets/s cap of a scan config (ASI_MAX_RATE).

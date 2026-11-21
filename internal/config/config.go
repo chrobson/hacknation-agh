@@ -2,7 +2,9 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"slices"
@@ -30,6 +32,14 @@ type Config struct {
 	ScanPorts      []int          // ASI_SCAN_PORTS, allowed TCP ports ("22,80,8000-8100"); empty = no restriction
 	Unstable       UnstableConfig
 	TickEvery      time.Duration // ASI_TICK_EVERY, scheduler tick, default 1m
+	// AllowHosts are host names resolved once at startup; every resolved
+	// address is added to AllowedCIDRs as a single address (ASI_ALLOW_HOSTS,
+	// e.g. host.docker.internal for a containerised app scanning its host).
+	AllowHosts []string
+	// AllPortsMaxAddrs: a scan config with the "auto" port profile scans all
+	// 65535 TCP ports (-p-) when its targets total at most this many
+	// addresses (ASI_ALL_PORTS_MAX_ADDRS, default 16; 0 disables).
+	AllPortsMaxAddrs int
 }
 
 // UnstableConfig defines host instability across runs.
@@ -39,8 +49,17 @@ type UnstableConfig struct {
 	Window              int // ASI_UNSTABLE_WINDOW, default 5 runs
 }
 
-// DefaultAllowedCIDRs covers the docker lab and RFC 5737 TEST-NET-1.
-const DefaultAllowedCIDRs = "10.20.0.0/18,192.0.2.0/24"
+// DefaultAllowedCIDRs covers the docker lab, RFC 5737 TEST-NET-1 and the
+// loopback addresses (services published by docker on the scanning host).
+const DefaultAllowedCIDRs = "10.20.0.0/18,192.0.2.0/24,127.0.0.0/8,::1/128"
+
+// DefaultAllPortsMaxAddrs is the default ASI_ALL_PORTS_MAX_ADDRS.
+const DefaultAllPortsMaxAddrs = 16
+
+// HostResolver resolves ASI_ALLOW_HOSTS; tests replace it.
+var HostResolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
+	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+}
 
 // DefaultScanExclude lists lab infrastructure that answers ARP but is not a
 // target: the network address, the docker bridge gateway and the scanner.
@@ -120,6 +139,12 @@ func Load() (Config, error) {
 	if c.AllowedCIDRs, err = ParsePrefixes(env("ASI_ALLOWED_CIDRS", DefaultAllowedCIDRs)); err != nil {
 		return c, fmt.Errorf("ASI_ALLOWED_CIDRS: %w", err)
 	}
+	if c.AllowHosts, c.AllowedCIDRs, err = allowHosts(os.Getenv("ASI_ALLOW_HOSTS"), c.AllowedCIDRs); err != nil {
+		return c, fmt.Errorf("ASI_ALLOW_HOSTS: %w", err)
+	}
+	if c.AllPortsMaxAddrs, err = envInt("ASI_ALL_PORTS_MAX_ADDRS", DefaultAllPortsMaxAddrs); err != nil {
+		return c, err
+	}
 	if c.ScanExclude, err = ParseAddrs(env("ASI_SCAN_EXCLUDE", DefaultScanExclude)); err != nil {
 		return c, fmt.Errorf("ASI_SCAN_EXCLUDE: %w", err)
 	}
@@ -156,6 +181,37 @@ func Load() (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+// allowHosts resolves a comma separated list of host names and appends
+// each address (as a single-address prefix) to allowed. A name that does not
+// resolve is an error: the operator asked for it explicitly.
+func allowHosts(s string, allowed []netip.Prefix) ([]string, []netip.Prefix, error) {
+	var hosts []string
+	for _, h := range strings.Split(s, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		hosts = append(hosts, h)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		addrs, err := HostResolver(ctx, h)
+		cancel()
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve %s: %w", h, err)
+		}
+		if len(addrs) == 0 {
+			return nil, nil, fmt.Errorf("resolve %s: no addresses", h)
+		}
+		for _, a := range addrs {
+			a = a.Unmap().WithZone("")
+			p := netip.PrefixFrom(a, a.BitLen())
+			if !slices.Contains(allowed, p) {
+				allowed = append(allowed, p)
+			}
+		}
+	}
+	return hosts, allowed, nil
 }
 
 // ParsePrefixes parses a comma separated list of CIDRs or single IPs.

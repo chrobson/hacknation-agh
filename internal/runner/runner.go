@@ -57,6 +57,9 @@ type Runner struct {
 	MaxAttempts int
 	ChunkBits4  int
 	ExtraPorts  []int // second phase-2 pass (scan.Opts.ExtraPorts)
+	// AllPortsMaxAddrs: the auto port profile scans every TCP port when the
+	// run's targets total at most this many addresses (0 = never).
+	AllPortsMaxAddrs int
 	// MaxRate caps a config's packets/s (all workers); a config with 0 or
 	// more is scanned at MaxRate. 0 = no cap.
 	MaxRate int
@@ -228,7 +231,11 @@ func EffectivePorts(spec string, allowed []int) ([]int, error) {
 // chunk is left or ctx ends (window end / shutdown). The run is then marked
 // done, failed (every chunk failed) or paused (chunks left).
 func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig) error {
-	ports, err := EffectivePorts(cfg.Ports, r.AllowedPorts)
+	plan, err := r.plan(ctx, cfg)
+	if err != nil {
+		r.log().Warn("cannot load targets for hostnames", "run", runID, "err", err)
+	}
+	pp, err := ResolvePorts(cfg, CountAddrs(plan.Chunks), r.AllPortsMaxAddrs, r.AllowedPorts, r.ExtraPorts)
 	if err != nil {
 		return fmt.Errorf("konfiguracja %q: %w", cfg.Name, err)
 	}
@@ -236,21 +243,20 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 	if err := r.Store.StartRun(ctx, runID); err != nil {
 		return err
 	}
-	plan, err := r.plan(ctx, cfg)
-	if err != nil {
-		r.log().Warn("cannot load targets for hostnames", "run", runID, "err", err)
-	}
+	// More workers than chunks would only idle while still taking a share
+	// of the rate, so a single-address run gets the whole max_rate.
 	k := max(cfg.Workers, 1)
+	if n := len(plan.Chunks); n > 0 && n < k {
+		k = n
+	}
 	rate := cfg.MaxRate
 	if r.MaxRate > 0 && (rate <= 0 || rate > r.MaxRate) {
 		rate = r.MaxRate
 	}
-	extra := r.ExtraPorts
-	if !cfg.ExtraPorts {
-		extra = nil
-	}
 	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(rate, k), Privileged: r.Privileged,
-		ExtraPorts: extra, Ports: ports}
+		ExtraPorts: pp.Extra, Ports: pp.Ports}
+	r.log().Info("scan port profile", "run", runID, "profile", pp.Profile, "explicit_ports", len(pp.Ports),
+		"top_ports", cfg.TopPorts, "extra_ports", len(pp.Extra))
 	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", opts.MaxRate)
 
 	var wg sync.WaitGroup

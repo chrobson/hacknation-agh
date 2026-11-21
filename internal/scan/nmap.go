@@ -166,6 +166,9 @@ func ServiceArgs(hosts []netip.Addr, o Opts) []string {
 	ports := []string{"--top-ports", strconv.Itoa(top)}
 	if len(o.Ports) > 0 {
 		ports = []string{"-p", config.FormatPorts(o.Ports)}
+		if IsAllPorts(o.Ports) {
+			ports = []string{"-p-"}
+		}
 	}
 	args := []string{scanType, "-Pn", "-n"}
 	args = append(args, ports...)
@@ -179,6 +182,12 @@ func ServiceArgs(hosts []netip.Addr, o Opts) []string {
 		args = append(args, h.Unmap().String())
 	}
 	return args
+}
+
+// IsAllPorts reports whether a sorted, duplicate-free port list is every TCP
+// port (1-65535), which nmap spells -p-.
+func IsAllPorts(ps []int) bool {
+	return len(ps) == 65535 && ps[0] == 1 && ps[len(ps)-1] == 65535
 }
 
 // ExtraServiceArgs builds the second phase-2 pass over o.ExtraPorts.

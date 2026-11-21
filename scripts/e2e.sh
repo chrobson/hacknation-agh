@@ -5,11 +5,182 @@
 #                          unstable host, RBAC (viewer gets 403 on POST),
 #                          DefectDojo Generic Findings export validated offline
 #                          and re-imported, pg_tde encryption checks.
-# nmap runs only inside the app container attached to the lab network.
+#   scripts/e2e.sh agh-template
+#                          AGH custom-network template on localhost (see
+#                          agh_template below): scan, stop the service on
+#                          8787, rescan, restore, rescan.
+# In smoke/full nmap runs only inside the app container attached to the lab
+# network.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:-smoke}"
-case "$mode" in smoke|full) ;; *) echo "usage: $0 smoke|full" >&2; exit 2 ;; esac
+case "$mode" in smoke|full|agh-template) ;; *) echo "usage: $0 smoke|full|agh-template" >&2; exit 2 ;; esac
+
+log() { printf '\n=== %s\n' "$*" >&2; }
+fail() { echo "E2E FAIL: $*" >&2; exit 1; }
+
+# agh_template runs the quickstart scenario of the AGH lab template
+# (docker-compose-custom-network.yml: httpbin 8888, PostgreSQL 15432,
+# RabbitMQ 5673/15673, Gitea 3001/2223, nginx 8787) against services
+# published on this host. The template files are not part of this repository
+# (unknown licence): ASI_AGH_LAB_DIR points at them (default notes/lab-agh of
+# the main checkout). The app reaches the host in one of three modes
+# (E2E_AGH_MODE):
+#   hostgw  app container -> host.docker.internal (default on macOS)
+#   host    app container in the host network namespace -> localhost (default on Linux)
+#   native  asi binary and nmap on this host -> localhost; database in docker
+agh_template() {
+  local dir="${ASI_AGH_LAB_DIR:-notes/lab-agh}"
+  if [ ! -f "$dir/docker-compose-custom-network.yml" ]; then
+    # A git worktree has no notes/: fall back to the main checkout.
+    local main
+    main="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
+    dir="$main/notes/lab-agh"
+  fi
+  local tplfile="$dir/docker-compose-custom-network.yml"
+  [ -f "$tplfile" ] || fail "AGH template not found: set ASI_AGH_LAB_DIR (docker-compose-custom-network.yml)"
+  local amode="${E2E_AGH_MODE:-}"
+  if [ -z "$amode" ]; then
+    case "$(uname -s)" in Linux) amode=host ;; *) amode=hostgw ;; esac
+  fi
+  export ASI_PORT="${ASI_PORT:-18081}" ASI_DB_PORT="${ASI_DB_PORT:-55433}"
+  local project="${E2E_PROJECT:-asi-agh}" target out="tmp/e2e-agh" ip
+  # Global (not local): the EXIT trap runs after this function has returned.
+  TPL=(docker compose -f "$tplfile")
+  case "$amode" in
+    hostgw) DC=(docker compose -p "$project" -f compose.yml -f compose.hostgw.yml); target=host.docker.internal ;;
+    host|native) DC=(docker compose -p "$project" -f compose.yml -f compose.host.yml); target=localhost ;;
+    *) fail "E2E_AGH_MODE must be hostgw, host or native" ;;
+  esac
+  target="${E2E_AGH_TARGET:-$target}"
+  mkdir -p "$out"
+  [ -f .env ] || ./scripts/gen-env.sh
+  set -a; . ./.env; set +a
+  psql_db() { "${DC[@]}" exec -T db psql -U "${ASI_DB_USER:-asi}" -d asi -tAX -v ON_ERROR_STOP=1 -c "$1"; }
+  if [ "$amode" = native ]; then
+    command -v nmap >/dev/null || fail "native mode needs nmap on this host"
+    go build -trimpath -o bin/asi ./cmd/asi
+    asi() {
+      ASI_DATABASE_URL="postgres://${ASI_DB_USER:-asi}:${ASI_DB_PASSWORD}@127.0.0.1:${ASI_DB_PORT}/asi?sslmode=disable" \
+        ./bin/asi "$@"
+    }
+    put() { cp "$1" "$2"; }
+  else
+    asi() { "${DC[@]}" exec -T app asi "$@"; }
+    put() { "${DC[@]}" exec -T app sh -c "cat > $2" < "$1"; }
+  fi
+
+  wait_port() { # wait_port <port> open|closed
+    local i
+    for i in $(seq 1 120); do
+      if (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; then
+        [ "$2" = open ] && return 0
+      else
+        [ "$2" = closed ] && return 0
+      fi
+      sleep 1
+    done
+    return 1
+  }
+  teardown() {
+    log "tear down the AGH template stack"
+    "${TPL[@]}" down -v >/dev/null 2>&1 || true
+    if [ "${E2E_KEEP:-0}" != 1 ]; then
+      "${DC[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+    fi
+  }
+  trap teardown EXIT
+
+  log "AGH template up ($tplfile)"
+  "${TPL[@]}" up -d
+  for port in 8787 8888 15432 5673 15673 3001 2223; do
+    wait_port "$port" open || fail "template port $port not open"
+  done
+  # Gitea and RabbitMQ accept connections before they answer; give -sV a
+  # chance to see the same banner in every run.
+  sleep "${E2E_AGH_SETTLE:-15}"
+
+  log "fresh app + database ($project, mode $amode, target $target)"
+  "${DC[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+  if [ "$amode" = native ]; then
+    "${DC[@]}" up -d --wait db
+    asi migrate >/dev/null
+  else
+    "${DC[@]}" up -d --build --wait db app
+    curl -fsS "http://127.0.0.1:${ASI_PORT}/healthz" >/dev/null || fail "app not healthy"
+  fi
+
+  log "import target $target"
+  printf 'value,tags\n%s,agh\n' "$target" > "$out/targets.csv"
+  put "$out/targets.csv" /tmp/asi-agh-targets.csv
+  asi import /tmp/asi-agh-targets.csv | tee "$out/import.json"
+  grep -q '"imported": 1' "$out/import.json" || fail "target import"
+  # Default port profile (auto): one or two addresses -> all 65535 ports.
+  psql_db "INSERT INTO scan_configs (name, target_ids, max_rate, workers) VALUES ('agh-template', '{}', ${E2E_AGH_RATE:-5000}, 4)" >/dev/null
+
+  ports_of() { # ports_of <run> -> sorted open TCP ports of the target address
+    psql_db "SELECT string_agg(port::text, ' ' ORDER BY port) FROM services WHERE run_id=$1 AND ip='$ip' AND vhost='' AND proto='tcp'"
+  }
+  scan() { # scan <name> -> run id
+    log "scan ($1)"
+    asi scan agh-template | tee "$out/scan_$1.json" >&2
+    grep -q '"status":"done"' "$out/scan_$1.json" || fail "scan $1 not done"
+    python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$out/scan_$1.json"
+  }
+  has() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
+  want=(8888 15432 5673 15673 3001 2223)
+
+  r1=$(scan run1)
+  ip=$(psql_db "SELECT host(ip) FROM host_obs WHERE run_id=$r1 AND up AND family(ip)=4 ORDER BY ip LIMIT 1")
+  [ -n "$ip" ] || fail "run1: target host not up"
+  p1=$(ports_of "$r1")
+  echo "run1 $ip: $p1"
+  for p in "${want[@]}" 8787; do has "$p1" "$p" || fail "run1: port $p not detected on $ip"; done
+
+  log "stop the service on 8787 (flask-app)"
+  "${TPL[@]}" stop flask-app
+  wait_port 8787 closed || fail "8787 still open after stop"
+  r2=$(scan run2)
+  p2=$(ports_of "$r2")
+  echo "run2 $ip: $p2"
+  has "$p2" 8787 && fail "run2: 8787 still reported"
+  for p in "${want[@]}"; do has "$p2" "$p" || fail "run2: port $p missing on $ip"; done
+  [ "$(psql_db "SELECT count(*) FROM changes WHERE run_id=$r2 AND kind='gone' AND ip='$ip' AND port=8787")" = 1 ] \
+    || fail "run2: no 'gone' change for $ip:8787"
+
+  log "restore the service on 8787"
+  "${TPL[@]}" up -d flask-app
+  wait_port 8787 open || fail "8787 not back"
+  r3=$(scan run3)
+  p3=$(ports_of "$r3")
+  echo "run3 $ip: $p3"
+  for p in "${want[@]}" 8787; do has "$p3" "$p" || fail "run3: port $p missing on $ip"; done
+  [ "$(psql_db "SELECT count(*) FROM changes WHERE run_id=$r3 AND kind='new' AND ip='$ip' AND port=8787")" = 1 ] \
+    || fail "run3: no 'new' change for $ip:8787"
+
+  log "changes per run (target $ip)"
+  psql_db "SELECT run_id, kind, port, field, left(coalesce(nullif(new,''),old), 60) FROM changes
+    WHERE run_id IN ($r2,$r3) AND ip='$ip' AND port IN (0,8787,8888,15432,5673,15673,3001,2223) ORDER BY run_id, kind, port" | tee "$out/changes.txt"
+  echo "host_state $ip: $(psql_db "SELECT state FROM host_state WHERE ip='$ip'")"
+  log "template services in run3 (nmap -sV)"
+  psql_db "SELECT port, product, version FROM services WHERE run_id=$r3 AND ip='$ip' AND vhost=''
+    AND port IN (8787,8888,15432,5673,15673,3001,2223) ORDER BY port" | tee "$out/services_run3.txt"
+
+  if [ "$amode" != native ]; then
+    log "scans page shows the port profile"
+    local jar="$out/admin.jar" base="http://127.0.0.1:${ASI_PORT}"
+    rm -f "$jar"
+    curl -fsS -c "$jar" -b "$jar" -o /dev/null -d "login=admin" --data-urlencode "password=${ASI_SEED_PASSWORD_ADMIN}" "$base/login"
+    curl -fsS -b "$jar" "$base/scans" | grep -q -- "-p-" || fail "/scans does not show the port profile"
+    curl -fsS -b "$jar" "$base/scans/new" | grep -q 'name="port_profile"' || fail "/scans/new has no port profile field"
+  fi
+  log "E2E AGH-TEMPLATE OK (mode $amode: run1 $r1, run2 $r2 without 8787, run3 $r3 with 8787)"
+}
+
+if [ "$mode" = agh-template ]; then
+  agh_template
+  exit 0
+fi
 
 export ASI_PORT="${ASI_PORT:-18080}"
 PROJECT="${E2E_PROJECT:-asi-e2e}"
@@ -19,8 +190,6 @@ MIN="${E2E_MIN:-0.9}"
 OUT="tmp/e2e"
 mkdir -p "$OUT"
 
-log() { printf '\n=== %s\n' "$*" >&2; }
-fail() { echo "E2E FAIL: $*" >&2; exit 1; }
 asi() { "${DC[@]}" exec -T app asi "$@"; }
 put() { "${DC[@]}" exec -T app sh -c "cat > $2" < "$1"; }   # host file -> container path
 psql_db() { "${DC[@]}" exec -T db psql -U "${ASI_DB_USER:-asi}" -d asi -tAX -v ON_ERROR_STOP=1 -c "$1"; }
