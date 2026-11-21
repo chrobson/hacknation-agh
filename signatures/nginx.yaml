@@ -4,6 +4,8 @@ category: server
 confidence: 85
 description: Serwer WWW nginx (nagłówek Server lub produkt z nmapa).
 condition: or
+cwe: [497]
+remediation: 'Ukryj wersję serwera (server_tokens off) i utrzymuj nginx we wspieranej wersji.'
 matchers:
   - type: header
     name: Server

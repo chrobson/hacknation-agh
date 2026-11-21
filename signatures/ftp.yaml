@@ -5,6 +5,9 @@ confidence: 85
 severity: low
 description: Usługa FTP rozpoznana przez nmap (nazwa usługi lub produkt). FTP przesyła hasła jawnym tekstem. ASI nie próbuje logowania (również anonimowego).
 condition: or
+cwe: [319]
+attack: [T1190]
+remediation: 'Zastąp FTP protokołem SFTP lub FTPS, bo FTP przesyła hasła i dane jawnym tekstem.'
 matchers:
   - type: service
     banner: '^(?:ssl/)?ftp\b'

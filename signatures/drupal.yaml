@@ -4,6 +4,9 @@ category: cms
 confidence: 90
 description: CMS Drupal (X-Generator, X-Drupal-Cache, atrybuty data-drupal, ciasteczko SESS<hash>).
 condition: or
+cwe: [497]
+attack: [T1190]
+remediation: 'Utrzymuj Drupala i moduły w aktualnych wersjach i ukryj pliki ujawniające wersję (CHANGELOG.txt).'
 matchers:
   - type: header
     name: X-Generator

@@ -8,6 +8,9 @@ condition: or
 outdated:
   below: "3.0"
   severity: high
+cwe: [1104, 319]
+attack: [T1190]
+remediation: 'Zaktualizuj vsftpd do wspieranej wersji i zastąp FTP protokołem SFTP lub FTPS.'
 matchers:
   - type: service
     product: '(?i)\bvsftpd(?: (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?))?'

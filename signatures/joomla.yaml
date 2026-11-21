@@ -4,6 +4,9 @@ category: cms
 confidence: 85
 description: CMS Joomla! (meta generator, zasoby /media/jui, /media/system).
 condition: or
+cwe: [497]
+attack: [T1190]
+remediation: 'Utrzymuj Joomlę i rozszerzenia w aktualnych wersjach i usuń pliki ujawniające wersję.'
 matchers:
   - type: body
     regex: '<meta name="generator" content="Joomla!'

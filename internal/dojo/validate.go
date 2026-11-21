@@ -18,6 +18,9 @@ var allowedFindingKeys = map[string]bool{
 	"title":               true,
 	"severity":            true,
 	"description":         true,
+	"cwe":                 true,
+	"mitigation":          true,
+	"references":          true,
 	"date":                true,
 	"unique_id_from_tool": true,
 	"vuln_id_from_tool":   true,
@@ -119,6 +122,21 @@ func Validate(b []byte) error {
 			add("finding %d: %v", i, err)
 		} else if len(v) > maxIDLen {
 			add("finding %d: vuln_id_from_tool longer than %d", i, maxIDLen)
+		}
+		if c, ok := f["cwe"]; ok {
+			var n json.Number
+			d := json.NewDecoder(bytes.NewReader(c))
+			d.UseNumber()
+			if err := d.Decode(&n); err != nil {
+				add("finding %d: cwe must be an integer", i)
+			} else if v, err := n.Int64(); err != nil || v < 0 {
+				add("finding %d: cwe must be a non-negative integer", i)
+			}
+		}
+		for _, k := range []string{"mitigation", "references"} {
+			if _, err := stringField(f, k); err != nil {
+				add("finding %d: %v", i, err)
+			}
 		}
 		if t, ok := f["tags"]; ok {
 			var tags []string

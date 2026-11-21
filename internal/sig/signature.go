@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/chrobson/hacknation-agh/internal/httpfp"
+	"github.com/chrobson/hacknation-agh/internal/model"
 )
 
 // Limits enforced by the validator.
@@ -66,7 +67,13 @@ type Signature struct {
 	// "version" regex group) is older than Below. With "or", matching goes
 	// on after the first hit until some matcher yields a version.
 	Outdated *OutdatedRule `yaml:"outdated,omitempty"`
-	Matchers []MatcherSpec `yaml:"matchers"`
+	// Optional classification, passed to the UI and to DefectDojo
+	// (cwe -> cwe, remediation -> mitigation, references -> references).
+	CWE         []int         `yaml:"cwe,omitempty"`         // CWE ids, most specific first
+	Attack      []string      `yaml:"attack,omitempty"`      // MITRE ATT&CK technique ids (T1190, T1078.001)
+	Remediation string        `yaml:"remediation,omitempty"` // one or two sentences
+	References  []string      `yaml:"references,omitempty"`  // http(s) URLs
+	Matchers    []MatcherSpec `yaml:"matchers"`
 
 	// Raw is the source YAML (stored in the signatures table).
 	Raw string `yaml:"-"`
@@ -125,7 +132,17 @@ type MatcherSpec struct {
 	bannerRe *regexp.Regexp
 }
 
+// Limits on the classification fields.
+const (
+	maxCWE         = 5
+	maxAttack      = 8
+	maxReferences  = 8
+	maxRemediation = 1024
+	maxRefLen      = 512
+)
+
 var (
+	attackRe     = regexp.MustCompile(`^T\d{4}(\.\d{3})?$`)
 	idRe         = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,63}$`)
 	headerNameRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 )
@@ -204,6 +221,7 @@ func (s *Signature) Validate() error {
 			add("outdated.severity must be one of %s", strings.Join(Severities, "|"))
 		}
 	}
+	p = append(p, s.validateMeta()...)
 	if len(s.Matchers) == 0 {
 		add("at least one matcher is required")
 	}
@@ -245,6 +263,58 @@ func (s *Signature) Validate() error {
 		return &ValidationError{ID: s.ID, Problems: p}
 	}
 	return nil
+}
+
+// validateMeta checks cwe, attack, remediation and references.
+func (s *Signature) validateMeta() []string {
+	var p []string
+	add := func(f string, a ...any) { p = append(p, fmt.Sprintf(f, a...)) }
+	if len(s.CWE) > maxCWE {
+		add("too many cwe ids (max %d)", maxCWE)
+	}
+	for _, c := range s.CWE {
+		if c < 1 || c > 9999 {
+			add("cwe %d must be a CWE number 1-9999 (write 306, not CWE-306)", c)
+		}
+	}
+	if len(s.Attack) > maxAttack {
+		add("too many attack ids (max %d)", maxAttack)
+	}
+	for _, a := range s.Attack {
+		if !attackRe.MatchString(a) {
+			add("attack %q must be a MITRE ATT&CK technique id such as T1190 or T1078.001", a)
+		}
+	}
+	if len(s.Remediation) > maxRemediation {
+		add("remediation too long (max %d chars)", maxRemediation)
+	}
+	if len(s.References) > maxReferences {
+		add("too many references (max %d)", maxReferences)
+	}
+	for _, r := range s.References {
+		u, err := url.Parse(r)
+		switch {
+		case len(r) > maxRefLen:
+			add("reference too long (max %d chars)", maxRefLen)
+		case err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.ContainsAny(r, " \t\r\n"):
+			add("reference %q must be an http:// or https:// URL", r)
+		}
+	}
+	return p
+}
+
+// Meta returns the signature's classification (nil when it has none).
+func (s *Signature) Meta() *model.SignatureMeta {
+	m := &model.SignatureMeta{
+		CWE:         append([]int(nil), s.CWE...),
+		Attack:      append([]string(nil), s.Attack...),
+		Remediation: strings.Join(strings.Fields(s.Remediation), " "),
+		References:  append([]string(nil), s.References...),
+	}
+	if m.Empty() {
+		return nil
+	}
+	return m
 }
 
 func (m *MatcherSpec) validate() []string {

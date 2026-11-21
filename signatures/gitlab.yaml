@@ -4,6 +4,9 @@ category: other
 confidence: 90
 description: GitLab (ciasteczko _gitlab_session, nagłówek X-Gitlab-Meta, gon.gitlab_url).
 condition: or
+cwe: [668]
+attack: [T1078]
+remediation: 'Wyłącz otwartą rejestrację, wymuś MFA i utrzymuj GitLaba w aktualnej wersji.'
 matchers:
   - type: cookie
     name: _gitlab_session

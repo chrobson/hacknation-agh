@@ -40,7 +40,10 @@ func fixture() ([]Service, []Annotation) {
 			HTTP: &HTTPSummary{URL: "http://10.20.0.14/", Status: 200, Title: "phpMyAdmin"},
 			Detections: []model.Detection{
 				{ServiceID: 3, SignatureID: "phpmyadmin", Name: "phpMyAdmin", Category: "admin-panel", Confidence: 100,
-					Evidence: map[string]string{"title": "phpMyAdmin"}},
+					Evidence: map[string]string{"title": "phpMyAdmin"},
+					Meta: &model.SignatureMeta{CWE: []int{668}, Attack: []string{"T1078", "T1190"},
+						Remediation: "Ogranicz phpMyAdmina do sieci administracyjnej.",
+						References:  []string{"https://docs.phpmyadmin.net/en/latest/setup.html#securing-your-phpmyadmin-installation"}}},
 			}},
 		{ServiceObs: model.ServiceObs{ID: 4, RunID: 7, Key: key("10.20.0.21", 8080, "tcp"), Product: "Jetty"},
 			HTTP: &HTTPSummary{URL: "http://10.20.0.21:8080/", Status: 200, Title: "STAGING - shop"},
@@ -369,5 +372,64 @@ func TestHostAnnotationKeyNormalised(t *testing.T) {
 	anns := []Annotation{{Key: model.AssetKey{IP: ip, Proto: "tcp"}, FalsePositive: true}}
 	if fs := BuildFindings(time.Time{}, []Service{s}, anns); len(fs) != 0 {
 		t.Errorf("host-level false positive ignored: %d findings", len(fs))
+	}
+}
+
+func TestSignatureMetaExported(t *testing.T) {
+	svcs, anns := fixture()
+	fs := BuildFindings(runDate, svcs, anns)
+	var got model.Finding
+	for _, f := range fs {
+		if f.VulnIDFromTool == "phpmyadmin" {
+			got = f
+		}
+		if f.VulnIDFromTool == "staging-banner" && (f.CWE != 0 || f.Mitigation != "" || f.References != "") {
+			t.Errorf("detection without meta got cwe/mitigation/references: %+v", f)
+		}
+	}
+	if got.CWE != 668 || got.Mitigation != "Ogranicz phpMyAdmina do sieci administracyjnej." {
+		t.Fatalf("cwe/mitigation not exported: %+v", got)
+	}
+	wantRefs := "https://docs.phpmyadmin.net/en/latest/setup.html#securing-your-phpmyadmin-installation\n" +
+		"https://cwe.mitre.org/data/definitions/668.html\n" +
+		"https://attack.mitre.org/techniques/T1078/\n" +
+		"https://attack.mitre.org/techniques/T1190/"
+	if got.References != wantRefs {
+		t.Errorf("references = %q, want %q", got.References, wantRefs)
+	}
+	if got.UniqueIDFromTool != "asi:sig:10.20.0.14:80:phpmyadmin" {
+		t.Errorf("unique_id_from_tool changed: %q", got.UniqueIDFromTool)
+	}
+	tags := strings.Join(got.Tags, ",")
+	if !strings.Contains(tags, "attack-t1078") || !strings.Contains(tags, "attack-t1190") {
+		t.Errorf("attack tags missing: %v", got.Tags)
+	}
+	// Round trip through the codec keeps the three fields.
+	b, err := NewCodec().Marshal([]model.Finding{got})
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := NewCodec().Unmarshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back[0].CWE != 668 || back[0].Mitigation != got.Mitigation || back[0].References != got.References {
+		t.Errorf("round trip lost metadata: %+v", back[0])
+	}
+}
+
+func TestValidateCWEType(t *testing.T) {
+	ok := `{"findings":[{"title":"t","severity":"Info","description":"d","unique_id_from_tool":"u","cwe":306,"mitigation":"m","references":"https://a"}]}`
+	if err := Validate([]byte(ok)); err != nil {
+		t.Fatalf("valid cwe rejected: %v", err)
+	}
+	for _, bad := range []string{
+		`{"findings":[{"title":"t","severity":"Info","description":"d","unique_id_from_tool":"u","cwe":"CWE-306"}]}`,
+		`{"findings":[{"title":"t","severity":"Info","description":"d","unique_id_from_tool":"u","cwe":-1}]}`,
+		`{"findings":[{"title":"t","severity":"Info","description":"d","unique_id_from_tool":"u","mitigation":5}]}`,
+	} {
+		if err := Validate([]byte(bad)); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
 	}
 }

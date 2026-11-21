@@ -4,6 +4,8 @@ category: server
 confidence: 85
 description: Microsoft Internet Information Services (Server, X-Powered-By ASP.NET).
 condition: or
+cwe: [497]
+remediation: 'Usuń nagłówki Server i X-Powered-By (removeServerHeader) i utrzymuj IIS w aktualnej wersji.'
 matchers:
   - type: header
     name: Server

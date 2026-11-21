@@ -4,6 +4,10 @@ category: server
 confidence: 90
 description: Publicznie dostępna strona /server-status modułu mod_status (ujawnia klientów i adresy URL).
 condition: or
+cwe: [200]
+remediation: 'Ogranicz /server-status dyrektywą Require ip do adresów monitoringu albo wyłącz mod_status.'
+references:
+  - https://httpd.apache.org/docs/2.4/mod/mod_status.html
 matchers:
   - type: path
     path: /server-status

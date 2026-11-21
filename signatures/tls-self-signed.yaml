@@ -3,6 +3,8 @@ name: Certyfikat TLS samopodpisany
 category: other
 confidence: 95
 description: Usługa prezentuje certyfikat podpisany samym sobą (brak zaufanego łańcucha).
+cwe: [295]
+remediation: 'Zastąp certyfikat samopodpisany certyfikatem z zaufanego CA (publicznego lub firmowego).'
 matchers:
   - type: tls
     self_signed: true

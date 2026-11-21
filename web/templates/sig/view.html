@@ -20,6 +20,9 @@
     <dt>Pewność</dt><dd>{{.Confidence}}%</dd>
     <dt>Warunek</dt><dd>{{if eq .Condition "and"}}wszystkie dopasowania (and){{else}}dowolne dopasowanie (or){{end}}</dd>
     {{with .Description}}<dt>Opis</dt><dd>{{.}}</dd>{{end}}
+    {{if or .CWE .Attack}}<dt>Klasyfikacja</dt><dd>{{range .CWE}}<a class="tag" href="https://cwe.mitre.org/data/definitions/{{.}}.html" target="_blank" rel="noopener noreferrer">CWE-{{.}}</a> {{end}}{{range .Attack}}<a class="tag" href="https://attack.mitre.org/techniques/{{.}}/" target="_blank" rel="noopener noreferrer">{{.}}</a> {{end}}</dd>{{end}}
+    {{with .Remediation}}<dt>Zalecenie</dt><dd>{{.}}</dd>{{end}}
+    {{with .References}}<dt>Źródła</dt><dd>{{range .}}<a href="{{.}}" target="_blank" rel="noopener noreferrer">{{.}}</a><br>{{end}}</dd>{{end}}
     {{end}}
   </dl>
   {{if .Errors}}<div class="errors"><h2>Sygnatura nie przechodzi walidacji</h2><ul>{{range .Errors}}<li>{{.}}</li>{{end}}</ul></div>{{end}}

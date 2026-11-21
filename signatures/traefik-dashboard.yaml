@@ -5,6 +5,11 @@ confidence: 90
 severity: high
 description: Dashboard Traefika dostępny bez uwierzytelnienia, typowo przez api.insecure=true na porcie 8080 (/ przekierowuje na /dashboard/). Ujawnia routery, usługi, backendy i middleware całej infrastruktury. Wersja z /api/version, odpytywanego tylko po rozpoznaniu dashboardu.
 condition: or
+cwe: [306]
+attack: [T1190]
+remediation: 'Wyłącz api.insecure i wystaw dashboard Traefika tylko przez router z uwierzytelnianiem (np. basicAuth/forwardAuth) w sieci administracyjnej.'
+references:
+  - https://doc.traefik.io/traefik/operations/api/
 matchers:
   - type: title
     regex: '^Traefik$'

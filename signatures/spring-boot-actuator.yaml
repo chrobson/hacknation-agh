@@ -4,6 +4,11 @@ category: framework
 confidence: 90
 description: Odsłonięte endpointy Spring Boot Actuator (/actuator, /actuator/health) lub strona Whitelabel Error.
 condition: or
+cwe: [215]
+attack: [T1190]
+remediation: 'Udostępniaj przez HTTP tylko endpointy health/info (management.endpoints.web.exposure.include) i zabezpiecz resztę uwierzytelnianiem.'
+references:
+  - https://docs.spring.io/spring-boot/reference/actuator/endpoints.html
 matchers:
   - type: path
     path: /actuator

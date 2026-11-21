@@ -157,7 +157,7 @@ func BuildFindings(date time.Time, svcs []Service, anns []Annotation) []model.Fi
 			if cat == "" {
 				cat = "other"
 			}
-			emit(model.Finding{
+			f := model.Finding{
 				Title:            detectionTitle(d),
 				Severity:         sev,
 				Description:      detectionDescription(s, d, comments),
@@ -165,11 +165,46 @@ func BuildFindings(date time.Time, svcs []Service, anns []Annotation) []model.Fi
 				UniqueIDFromTool: UniqueSignatureID(k, d.SignatureID),
 				VulnIDFromTool:   d.SignatureID,
 				Endpoints:        []model.AssetKey{k},
-				Tags:             normalizeTags(append([]string{"asi", cat}, annTags...)),
-			})
+			}
+			tags := append([]string{"asi", cat}, annTags...)
+			if m := d.Meta; m != nil {
+				if len(m.CWE) > 0 {
+					f.CWE = m.CWE[0]
+				}
+				f.Mitigation = m.Remediation
+				f.References = references(m)
+				for _, a := range m.Attack {
+					tags = append(tags, "attack-"+a)
+				}
+			}
+			f.Tags = normalizeTags(tags)
+			emit(f)
 		}
 	}
 	return out
+}
+
+// references lists the signature's own URLs followed by the MITRE pages of
+// its CWE ids and ATT&CK techniques, one per line, without duplicates.
+func references(m *model.SignatureMeta) string {
+	var refs []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		if u = strings.TrimSpace(u); u != "" && !seen[u] {
+			seen[u] = true
+			refs = append(refs, u)
+		}
+	}
+	for _, u := range m.References {
+		add(u)
+	}
+	for _, c := range m.CWE {
+		add(fmt.Sprintf("https://cwe.mitre.org/data/definitions/%d.html", c))
+	}
+	for _, a := range m.Attack {
+		add("https://attack.mitre.org/techniques/" + strings.ReplaceAll(a, ".", "/") + "/")
+	}
+	return strings.Join(refs, "\n")
 }
 
 // annotationKey normalises an annotation key: IPv4-mapped addresses are
