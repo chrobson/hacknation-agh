@@ -20,7 +20,7 @@ BEGIN
         FROM pg_attribute a
         JOIN pg_class c ON c.oid = a.attrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+        WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p')
           AND a.attnum > 0 AND NOT a.attisdropped
           AND a.atttypid IN ('text'::regtype, 'varchar'::regtype, 'jsonb'::regtype, 'json'::regtype,
                              'inet'::regtype, 'cidr'::regtype, 'bytea'::regtype, 'text[]'::regtype)
@@ -30,7 +30,7 @@ BEGIN
     BEGIN
         DELETE FROM pg_statistic s
         USING pg_class c, pg_namespace n
-        WHERE s.starelid = c.oid AND c.relnamespace = n.oid AND n.nspname = 'public';
+        WHERE s.starelid = c.oid AND c.relnamespace = n.oid AND n.nspname = current_schema();
     EXCEPTION WHEN insufficient_privilege THEN
         RAISE NOTICE 'pg_statistic not cleared (not a superuser); run ANALYZE after granting';
     END;
