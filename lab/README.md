@@ -1,0 +1,145 @@
+# Scan lab
+
+Isolated docker network for developing and verifying the scanner. **Scan only this network**
+(`10.20.0.0/18`) or other targets you are authorised to scan.
+
+- Network `asi-lab`, `10.20.0.0/18` (16,384 addresses), gateway `10.20.0.1`.
+- 30 targets on fixed IPs spread across the whole /18, plus a `scanner` container
+  (`10.20.63.250`, alpine + nmap 7.95, `cap_add: NET_RAW, NET_ADMIN`).
+- About 1.3 GiB RAM with everything running (Jenkins ~400 MiB, MySQL ~170 MiB). No Elasticsearch:
+  Gitea stands in for "Kibana or another web UI".
+- Images are pinned. Two small images are built locally: `scanner.Dockerfile` and
+  `targets.Dockerfile` (alpine + openssh, socat, busybox-extras).
+
+## Usage
+
+```sh
+lab/change.sh run1        # bring the lab up in variant run1 (also run2, run3); idempotent
+lab/scan.sh run1          # 2-phase nmap from the scanner container -> testdata/nmap/run1_*.xml
+python3 lab/compare.py run1 run2 run3   # real XML vs lab/expected/*.json
+python3 lab/gen_expected.py             # regenerate lab/expected/*.json (--check = verify fresh)
+lab/change.sh down        # docker compose down -v --remove-orphans
+```
+
+Other compose projects can join the lab as an external network:
+`networks: { lab: { external: true, name: asi-lab } }`.
+
+## Targets (run1)
+
+| IP | Service | Ports (tcp) | Notes / intended detections |
+|---|---|---|---|
+| 10.20.0.10 | nginx-web | 80 | public site + vhost `staging.lab.local` (`staging-vhost`) |
+| 10.20.0.11 | nginx-tls | 80, 443 | 80 → 301 https; self-signed cert CN=secure.lab.local (`tls-self-signed`) |
+| 10.20.1.20 | WordPress 6.6.2 | 80 | not installed yet, 302 to install.php (`wordpress`) |
+| 10.20.1.21 | MariaDB 11.4.4 | 3306 | WordPress database |
+| 10.20.1.30 | phpMyAdmin 5.2.1 | 80 | `phpmyadmin` |
+| 10.20.2.40 | Jenkins 2.479.3 | 8080, 50000 | setup wizard off, `X-Jenkins` header (`jenkins`) |
+| 10.20.3.50 | Grafana 11.3.0 | 3000 | `grafana` |
+| 10.20.4.60 | Tomcat 9.0.97 | 8080 | manager app reachable remotely, tomcat/tomcat (`tomcat`, `tomcat-manager`) |
+| 10.20.5.70 | Gitea 1.22.3 | 22, 3000 | `gitea` |
+| 10.20.6.80 | OpenSSH 9.7 | 22 | user lab/lab |
+| 10.20.7.90 | MySQL 8.4.3 | 3306, 33060* | |
+| 10.20.8.100 | Mosquitto 2.0.20 | 1883* | MQTT, anonymous allowed (`mqtt-anonymous`) |
+| 10.20.9.110 | admin-app (nginx) | 80 | `/login` form, `/admin` 401 Basic (`login-panel`, `admin-panel`) |
+| 10.20.10.120 | PostgreSQL 16.6 | 5432 | |
+| 10.20.11.130 | Redis 7.4.1 | 6379* | no auth |
+| 10.20.12.140 | NATS 2.10.22 | 4222*, 8222 | 8222 = monitoring HTTP (`nats-monitoring`) |
+| 10.20.16.10 | busybox httpd | 80 | |
+| 10.20.16.11 | busybox httpd | 8080 | |
+| 10.20.20.20 | fake FTP banner | 21 | `220 (vsFTPd 3.0.3)` |
+| 10.20.20.21 | fake SMTP banner | 25 | Postfix |
+| 10.20.24.30 | "IoT router" | 23, 80 | busybox telnetd + router web UI (`router-login`) |
+| 10.20.28.40 | fake SSH banner | 22 | `SSH-2.0-OpenSSH_7.4` (old version) |
+| 10.20.32.50 | "IP camera" | 80 | busybox httpd (`ip-camera`) |
+| 10.20.36.60 | Memcached 1.6.32 | 11211* | removed in run2 |
+| 10.20.40.70 | Apache httpd 2.4.58 | 80 | upgraded to 2.4.62 in run2 |
+| 10.20.44.80 | Adminer 4.8.1 | 8080 | `adminer` |
+| 10.20.48.90 | CoreDNS 1.11.3 | 53 (+udp) | serves `lab.local` (staging.lab.local → 10.20.0.10, …); nmap names it "NLnet Labs NSD" |
+| 10.20.52.100 | HAProxy 3.0.6 | 80 | stats at `/haproxy?stats` (`haproxy-stats`) |
+| 10.20.56.110 | web-8443 (nginx) | 8443 | expired self-signed cert CN=old.lab.local, 2020–2021 (`tls-self-signed`, `tls-expired`) |
+| 10.20.60.120 | flappy (busybox httpd) | 80 | **unstable**: up in run1, gone in run2, back in run3 |
+
+`*` = port **not** in nmap's `--top-ports 1000` (1883, 4222, 6379, 11211, 33060). The phase-2 reference
+scan cannot see these ports, and the hosts 10.20.8.100, 10.20.11.130 and 10.20.36.60 come back with
+no open ports (they are found in discovery only). `expected/*.json` keeps them as ground truth with
+`"in_top1000": false`. To find them, phase 2 needs an explicit port list (top 1000 plus
+`1883,4222,6379,11211,33060,8883,27017,9200,…`).
+
+The detection IDs in parentheses are proposed signature IDs for the fingerprinting module.
+`expected/*.json` uses the same names.
+
+## Variants
+
+| | run1 → run2 | run2 → run3 |
+|---|---|---|
+| host_up | 10.20.58.10 intranet (httpd 2.4.62, :80) | 10.20.60.120 flappy (+ `unstable`) |
+| host_down | 10.20.60.120 flappy, 10.20.36.60 memcached | – |
+| new | 10.20.16.10:8000, 10.20.58.10:80 | 10.20.60.120:80 |
+| gone | 10.20.24.30:23 (telnet off), 10.20.36.60:11211\*, 10.20.60.120:80 | – |
+| changed | 10.20.40.70:80 Apache 2.4.58 → 2.4.62; 10.20.28.40:22 OpenSSH 7.4 → 8.9p1 | 10.20.0.10:80 nginx 1.27.3 → 1.26.2; 10.20.20.21:25 Postfix → Exim 4.96 |
+
+Variants are compose override files applied as `-f compose.yml -f variants/runN.yml`. A service is
+removed with `scale: 0`. A service added only in a variant (intranet) is removed again by
+`--remove-orphans` when you switch back to run1.
+
+## expected/runN.json
+
+Generated by `gen_expected.py`, the single source of truth, so edit that script and not the JSON:
+
+```json
+{"run":"run2","network":"10.20.0.0/18",
+ "infra":[{"ip":"10.20.0.1","note":"docker bridge gateway"}, ...],
+ "hosts":[{"ip":"10.20.0.10","name":"nginx-web","services":[
+   {"port":80,"proto":"tcp","product":"nginx","version":"1.27.3","actual":"nginx 1.27.3",
+    "in_top1000":true,"detections":["staging-vhost"]}]}],
+ "changes_from_prev":[{"kind":"changed","ip":"10.20.40.70","port":80,"proto":"tcp","in_top1000":true,
+   "old":"Apache httpd 2.4.58","new":"Apache httpd 2.4.62"}]}
+```
+
+- `product` and `version` are what `nmap -sV --version-light` really reports. They were checked
+  against the real scans: nmap gives PostgreSQL 16.6 as `16.0 - 16.2` and CoreDNS as
+  `NLnet Labs NSD`, and busybox httpd gets an empty product. `actual` holds the real software.
+- `changes_from_prev[].kind`: `host_up`, `host_down`, `new`, `gone`, `changed`, `unstable`, the same
+  values as the `changes` table. Host-level entries use `port: 0, proto: ""`. A host that appears or
+  disappears also lists each of its services as `new`/`gone`. `unstable` means at least 2 up/down
+  flips within the last 5 runs.
+- `infra` lists addresses that discovery reports but that are not targets: `10.20.0.0` (the docker
+  bridge answers ARP for the network address, with the same MAC as the gateway), `10.20.0.1`
+  (gateway) and `10.20.63.250` (the scanner itself).
+
+## Reference scans and timing
+
+Commands, run from the scanner container (`scan.sh`):
+
+```sh
+# phase 1: discovery over the whole /18
+nmap -sn -n -PE -PS21,22,23,25,53,80,110,143,443,445,1883,3306,3389,5432,8080,8443 -PA80,443 10.20.0.0/18 -oX -
+# phase 2: live hosts only (infra excluded)
+nmap -sS -n -Pn --top-ports 1000 -sV --version-light --open <live hosts> -oX -
+```
+
+The scanner sits on the same L2 segment, so nmap uses an ARP ping for discovery even though
+`-PE/-PS/-PA` are given. Phase 2 adds `-n -Pn` because the hosts are already known to be up.
+
+Measured 2026-11-21 (nmap 7.95, Docker Desktop 29.8.2 on macOS arm64, 10 CPUs, 7.8 GiB VM):
+
+| Run | Phase 1 (16,384 IPs) | Hosts up | Phase 2 (top 1000, -sV light) | Open services | compare.py |
+|---|---|---|---|---|---|
+| run1 | 95 s (first try), 162 s (saved file) | 33 (30 + 3 infra) | 34 s / 32 s | 31 | OK |
+| run2 | 89 s | 32 (29 + 3 infra) | 32 s | 31 | OK |
+| run3 | 106 s | 33 (30 + 3 infra) | 32 s | 32 | OK |
+
+A full `-p- -T4` sweep of the 30 targets (no -sV) takes about 12 s. It confirms that every listening
+port is the one listed in `expected/run1.json`. Phase 1 dominates: about 16k ARP probes, roughly
+100–160 s depending on load.
+
+Saved XML: `testdata/nmap/run{1,2,3}_discovery.xml` and `run{1,2,3}_services.xml`.
+
+## Files
+
+- `compose.yml`: network, scanner and 30 targets
+- `variants/run{1,2,3}.yml`, `change.sh`
+- `scanner.Dockerfile`, `targets.Dockerfile`
+- `conf/`: nginx configs, web pages, TLS certificates (lab-only keys, self-signed), tomcat users,
+  mosquitto, CoreDNS, HAProxy, `banner.sh`
+- `scan.sh`, `compare.py`, `gen_expected.py`, `expected/`

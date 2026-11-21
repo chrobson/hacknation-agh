@@ -1,0 +1,16 @@
+lab.local:53 {
+    hosts {
+        10.20.0.10 www.lab.local lab.local staging.lab.local
+        10.20.0.11 secure.lab.local
+        10.20.1.20 blog.lab.local
+        10.20.2.40 jenkins.lab.local
+        10.20.3.50 grafana.lab.local
+        10.20.5.70 git.lab.local
+        10.20.9.110 app.lab.local
+        10.20.56.110 old.lab.local
+        fallthrough
+    }
+}
+.:53 {
+    errors
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lab-only credentials: tomcat / tomcat (classic default) -->
+<tomcat-users xmlns="http://tomcat.apache.org/xml" version="1.0">
+  <role rolename="manager-gui"/>
+  <user username="tomcat" password="tomcat" roles="manager-gui"/>
+</tomcat-users>

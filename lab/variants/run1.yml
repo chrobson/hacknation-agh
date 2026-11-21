@@ -1,0 +1,2 @@
+# run1: baseline lab exactly as defined in compose.yml (30 targets).
+services: {}
