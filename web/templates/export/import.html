@@ -1,0 +1,28 @@
+{{template "base" .}}
+{{define "title"}}Import wyników · Attack Surface Intelligence{{end}}
+{{define "nav"}}<a href="/">Pulpit</a> <a href="/export">Eksport</a> <a href="/import" aria-current="page">Import</a>{{end}}
+{{define "content"}}
+<h1>Import wyników</h1>
+<p>Obsługiwane formaty: wynik nmapa w XML (<code>nmap -oX</code>) oraz plik DefectDojo Generic Findings JSON. Każdy import tworzy nowy przebieg typu „import”, porównywany z poprzednimi jak zwykły skan.</p>
+{{with .Error}}<p class="flash err" role="alert">{{.}}</p>{{end}}
+<form method="post" action="/import" enctype="multipart/form-data">
+  <label for="file">Plik (maks. {{.MaxMB}} MB)</label>
+  <input id="file" name="file" type="file" accept=".xml,.json,application/xml,application/json" required>
+  <button type="submit">Importuj</button>
+</form>
+{{with .Report}}
+<h2>Raport importu</h2>
+<dl>
+  {{if .RunID}}<dt>Przebieg</dt><dd>#{{.RunID}}</dd>{{end}}
+  <dt>Format</dt><dd>{{if eq .Format "nmap-xml"}}nmap XML{{else if eq .Format "generic-findings"}}DefectDojo Generic Findings{{else}}nieznany{{end}}</dd>
+  <dt>Hosty</dt><dd>{{.Hosts}}</dd>
+  <dt>Usługi</dt><dd>{{.Services}}</dd>
+  <dt>Detekcje</dt><dd>{{.Detections}}</dd>
+</dl>
+{{if .Errors}}
+<h3>Pominięte pozycje ({{len .Errors}})</h3>
+<ul>{{range .Errors}}<li>{{.}}</li>{{end}}</ul>
+{{end}}
+{{if .RunID}}<p><a href="/export?run={{.RunID}}">Przejdź do eksportu tego przebiegu</a></p>{{end}}
+{{end}}
+{{end}}

@@ -1,0 +1,50 @@
+{{template "base" .}}
+{{define "title"}}Eksport i DefectDojo · Attack Surface Intelligence{{end}}
+{{define "nav"}}<a href="/">Pulpit</a> <a href="/export" aria-current="page">Eksport</a> <a href="/import">Import</a>{{end}}
+{{define "content"}}
+<h1>Eksport wyników</h1>
+{{with .Message}}<p class="flash ok" role="status">{{.}}</p>{{end}}
+{{with .Error}}<p class="flash err" role="alert">{{.}}</p>{{end}}
+{{if .Run}}
+<p>Ostatni zakończony przebieg: <strong>#{{.Run.ID}}</strong>{{if eq .Run.Kind "import"}} (import){{end}}, {{fmtTime .Run.FinishedAt}}.
+Usługi: <strong>{{.Services}}</strong>, findingi DefectDojo: <strong>{{.Findings}}</strong> (bez fałszywych alarmów).</p>
+<div class="actions">
+  <a class="button" href="/export/services.csv?run={{.Run.ID}}" download>Pobierz CSV</a>
+  <a class="button" href="/export/services.json?run={{.Run.ID}}" download>Pobierz JSON</a>
+  <a class="button" href="/export/defectdojo.json?run={{.Run.ID}}" download>Pobierz plik DefectDojo (Generic Findings)</a>
+</div>
+<p class="hint">Pliki są generowane na żądanie z bazy danych i nie są zapisywane na dysku serwera.</p>
+
+<h2>DefectDojo</h2>
+{{if .PushOn}}
+<form method="post" action="/export/defectdojo/push?run={{.Run.ID}}">
+  <p>Instancja: <code>{{.DojoURL}}</code>. Wysyłka używa <em>reimport-scan</em> z <code>close_old_findings=true</code>: findingi, których nie ma w bieżącym przebiegu, zostaną zamknięte.</p>
+  <button type="submit">Wyślij do DefectDojo</button>
+</form>
+{{with .PushResult}}<p>Test w DefectDojo: #{{.ID}} ({{.Endpoint}}).</p>{{end}}
+{{else}}
+<p>Wysyłka do DefectDojo jest wyłączona. Włącz ją zmiennymi <code>ASI_DOJO_URL</code> i <code>ASI_DOJO_PUSH=true</code>; plik możesz też pobrać i zaimportować ręcznie (typ skanu „Generic Findings Import”).</p>
+{{end}}
+{{else}}
+<p>Brak zakończonego przebiegu skanu. Uruchom skan lub <a href="/import">zaimportuj wyniki</a>.</p>
+{{end}}
+
+{{if .Pushes}}
+<h3>Historia wysyłek</h3>
+<table>
+  <thead><tr><th>Data</th><th>Przebieg</th><th>Metoda</th><th>Findingi</th><th>Test</th><th>Wynik</th></tr></thead>
+  <tbody>
+  {{range .Pushes}}
+  <tr>
+    <td>{{fmtTime .PushedAt}}</td>
+    <td>{{with .RunID}}#{{.}}{{end}}</td>
+    <td>{{.Endpoint}}</td>
+    <td>{{.Findings}}</td>
+    <td>{{with .TestID}}#{{.}}{{end}}</td>
+    <td>{{if .OK}}OK{{else}}Błąd: {{.Error}}{{end}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
