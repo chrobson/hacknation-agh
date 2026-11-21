@@ -6,7 +6,7 @@ System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i us
 
 ## 2. Szybki start
 
-Wymagania: Docker z pluginem Compose v2 (polecenie `docker compose`), `make`, `openssl`. Pliki Compose nie używają znaczników `!reset`/`!override`, więc nie wymagają Compose 2.24+ (sprawdzone na żywo: Docker Compose 5.5.0 z OrbStack; starszych wersji nie uruchamiano). Tryb natywny wymaga też Go 1.26+ i nmapa na hoście. `make doctor` sprawdza środowisko (Docker i dostęp do demona, Compose v2, `openssl`, wolne porty `ASI_PORT`/`ASI_DB_PORT`) i wskazuje, co poprawić; każde `make up…` uruchamia je samo.
+Wymagania: Docker z pluginem Compose v2 (polecenie `docker compose`), `make`, `openssl`. Pliki Compose nie używają znaczników `!reset`/`!override`, więc nie wymagają Compose 2.24+ (sprawdzone na żywo: Docker Compose 5.5.0 z OrbStack na macOS i Docker Compose 2.40.3 z Ubuntu 22.04). Tryb natywny wymaga też Go 1.26+ i nmapa na hoście. `make doctor` sprawdza środowisko (Docker i dostęp do demona, Compose v2, `openssl`, wolne porty `ASI_PORT`/`ASI_DB_PORT`) i wskazuje, co poprawić; każde `make up…` uruchamia je samo.
 
 ```sh
 git clone https://github.com/chrobson/hacknation-agh.git && cd hacknation-agh
@@ -162,6 +162,8 @@ make e2e           # lab /18 run1 → run2 → run3: zmiany, host niestabilny, R
 make e2e-agh       # szablon AGH na localhost; pliki szablonu: ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh
 ```
 
+Skrypty `e2e` wymagają dodatkowo `python3` i `curl` na hoście.
+
 Testy integracyjne z bazą: `ASI_TEST_DATABASE_URL=postgres://… go test -tags integration ./...`.
 
 **Lab /18** (`make e2e`, 64 chunki /24, 30 hostów, 1000 pakietów/s, 4 wątki, `-sS`): precision i recall 1.0 dla hostów, usług, detekcji i zmian w każdym z trzech przebiegów.
@@ -178,12 +180,14 @@ Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt pr
 
 Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`make up-hostgw`, `make up-host`, `make native`) z `make seed-demo` i skanem konfiguracji **Demo**: 2 min 52 s dla `host.docker.internal`, około 4 min dla `localhost` (dwa adresy).
 
+Na Linuksie (Ubuntu 22.04, sekcja 9) kroki z sekcji 2 i 2a w trybie `make up-host`: skan **Demo** `localhost` 3 min 6 s, wszystkie porty szablonu wykryte; po zatrzymaniu `flask-app` zmiana `gone` dla 8787, po ponownym starcie `new` i `unstable`, host `up`. `make e2e-agh` (tryb `host`, 5000 pakietów/s, około 1 min 20 s na skan): hosty, usługi, detekcje i zmiany z precision i recall 1.0 (usługi 10/0/0, detekcje 6/0/0, w tym PostgreSQL bazy samego testu na 55433).
+
 ## 9. Ograniczenia
 
 - Skanowane są tylko porty TCP; UDP (np. DNS, SNMP) nie jest skanowany.
 - Chunki mają stały rozmiar /24. Adaptacyjny dobór rozmiaru (`target.Sizer`) jest zaimplementowany i przetestowany, ale nie jest podpięty do runnera.
-- Wszystkie testy wykonano na macOS z OrbStack (kontenery w maszynie wirtualnej z Linuksem), nie na fizycznym hoście z Linuksem. Tryb sieci hosta na Linuksie jest najprostszy, ale nie był uruchomiony na takim hoście.
-- W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe), bo to faktycznie otwarte porty. Własny interfejs skanera jest rozpoznawany po nagłówku `X-Asi-Instance` i nie dostaje detekcji (strony logowania); inne aplikacje hosta z formularzem logowania (np. lokalny DefectDojo na 8081) są raportowane jak każda inna usługa.
+- Linux sprawdzono na Ubuntu 22.04.5 LTS (aarch64, maszyna OrbStack z własnym silnikiem Dockera, jądro 7.2.12) z pakietami dystrybucji: Docker Engine 29.1.3 (`docker.io`) i Docker Compose 2.40.3 (`docker-compose-v2`). Przeszły: `make doctor`, `make env`, `make up-host`, `make seed-demo`, skan i scenariusz z sekcji 2a, logowanie i strony `/`, `/results`, `/changes` (200), `make e2e-agh`, skan i logowanie przy włączonym ufw (domyślnie deny incoming), komunikat `make doctor` o zajętym porcie 9080 przed startem oraz ponowne `make up-host` na działającym stosie bez błędu. Bez pakietu `docker-buildx` Compose wypisuje ostrzeżenie o Bake i buduje obraz zwykłym builderem. Nie uruchamiano na x86_64 ani na fizycznym serwerze; pozostałe testy (lab /18, DefectDojo) wykonano na macOS z OrbStack.
+- W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe, na Ubuntu lokalny port containerd), bo to faktycznie otwarte porty. Własny interfejs skanera jest rozpoznawany po nagłówku `X-Asi-Instance` i nie dostaje detekcji (strony logowania); inne aplikacje hosta z formularzem logowania (np. lokalny DefectDojo na 8081) są raportowane jak każda inna usługa.
 - Klucz pg_tde leży w lokalnym keyringu w wolumenie Dockera na tym samym hoście; produkcyjnie powinien trafić do KMS (OpenBao/Vault, KMIP). Nazwy tabel i kolumn w katalogu systemowym nie są szyfrowane.
 - Brak pasywnych źródeł danych (CT logs, DNS).
 - Konto użytkownika nie ma zmiany hasła w interfejsie; hasła startowe pochodzą z `.env` przy pierwszym starcie.
