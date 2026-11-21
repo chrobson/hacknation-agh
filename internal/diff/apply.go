@@ -108,6 +108,13 @@ func ApplyRunTx(ctx context.Context, tx pgx.Tx, runID int64, cfg Config, now tim
 			if lc := LatencyChanges(prev, curr, lat); len(lc) > 0 {
 				res.Changes = append(res.Changes, lc...)
 			}
+			// A reverse proxy answering 502/503/504 for a dead upstream is
+			// fingerprinted as the proxy: one http_status row, not five.
+			st, err := runHTTPStatus(ctx, tx, runID, res.PrevRunID)
+			if err != nil {
+				return res, fmt.Errorf("http status: %w", err)
+			}
+			res.Changes = CollapseGateway(prev, curr, st, res.Changes)
 			// A service that keeps disappearing and coming back is unstable.
 			var keys []model.AssetKey
 			for _, c := range res.Changes {

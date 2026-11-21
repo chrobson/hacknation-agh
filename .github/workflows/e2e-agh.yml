@@ -1,0 +1,103 @@
+# Linux proof of the localhost scenario that the jury runs: the app in the
+# host network namespace (compose.host.yml, nmap -sS as root inside the
+# container), the AGH custom-network services published on the runner,
+# scripts/e2e.sh agh-template (scan, stop 8787, scan, restore, scan,
+# asi verify). DefectDojo is skipped (too large for a hosted runner).
+name: e2e-agh
+
+on:
+  push:
+    branches: [main, "wt/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make test
+
+  agh-template-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      E2E_AGH_MODE: host
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Environment
+        run: |
+          uname -a
+          docker version --format 'docker {{.Server.Version}}'
+          docker compose version
+          make env
+          ./scripts/doctor.sh --db-port
+
+      - name: AGH lab stand-in (ci/agh-custom-network.yml)
+        run: |
+          dir="$RUNNER_TEMP/agh-lab"
+          mkdir -p "$dir"
+          cp ci/agh-custom-network.yml "$dir/docker-compose-custom-network.yml"
+          echo "ASI_AGH_LAB_DIR=$dir" >> "$GITHUB_ENV"
+          docker compose -f "$dir/docker-compose-custom-network.yml" pull -q
+
+      - name: make up-host (README Linux mode) and health check
+        run: |
+          make up-host
+          curl -fsS http://127.0.0.1:9080/healthz
+          docker compose -f compose.host.yml exec -T app sh -c 'id -u; nmap --version | head -1; nmap -sS -Pn -p 9080 127.0.0.1 | grep 9080/tcp'
+          docker compose -f compose.host.yml down -v
+
+      - name: make e2e-agh (host network, localhost)
+        run: make e2e-agh
+
+      - name: Summary
+        if: always()
+        run: python3 scripts/ci-summary.py tmp/e2e-agh >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verify JSON and scan logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-agh-linux
+          path: |
+            tmp/e2e-agh/
+            !tmp/e2e-agh/*.jar
+          if-no-files-found: warn
+
+  # Fault injection (scripts/e2e-toxi.sh): latency and timeout toxics on the
+  # proxied WordPress must not produce false gone/changed rows.
+  toxiproxy-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      E2E_TOXI_MODE: host
+    steps:
+      - uses: actions/checkout@v4
+      - run: make env
+      - run: docker compose -f ci/agh-proxy.yml pull -q
+      - name: make e2e-toxi
+        run: make e2e-toxi
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Toxiproxy phase on ubuntu-24.04'
+            echo '```'
+            cat tmp/e2e-toxi/summary.txt tmp/e2e-toxi/changes.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-toxi-linux
+          path: tmp/e2e-toxi/
+          if-no-files-found: warn
