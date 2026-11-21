@@ -77,6 +77,17 @@
       }
     }
   ],
+  "go-httpbin": [
+    {
+      "signature": "httpbin",
+      "category": "other",
+      "confidence": 90,
+      "evidence": {
+        "severity": "Low",
+        "title": "go-httpbin"
+      }
+    }
+  ],
   "grafana-via-api": [
     {
       "signature": "grafana",

@@ -1,28 +1,31 @@
-# Stand-in for the AGH lab template "custom-network" stack, used only by CI
-# (.github/workflows/e2e-agh.yml). The template itself is not published
-# anywhere public and its licence is unknown, so it is not copied into this
-# repository; this file restates only the public facts of its README table:
-# the same upstream images on the same host ports, with the same service
-# names that scripts/e2e.sh stops and restarts (flask-app on 8787).
-name: asi-ci-agh
+# CI lab for the localhost scenario (.github/workflows/e2e-agh.yml,
+# scripts/e2e.sh agh-template). Written for this repository: one service of
+# each kind the scenario expects (HTTP test API, PostgreSQL, AMQP broker with
+# its management UI, Git forge with SSH, plain web server), published on the
+# host ports that scripts/e2e.sh checks. Passwords are throwaway CI values.
+name: asi-ci-lab
 
 services:
-  custom-api:
-    image: kennethreitz/httpbin
-    ports: ["8888:80"]
-  postgres:
-    image: postgres:16
+  http-api:            # 8888: httpbin-style request echo service
+    image: mccutchen/go-httpbin:v2.15.0
+    ports: ["8888:8080"]
+
+  pg:                  # 15432: PostgreSQL
+    image: postgres:17-alpine
     environment:
-      POSTGRES_DB: appdb
-      POSTGRES_USER: appuser
-      POSTGRES_PASSWORD: ci-only-not-a-secret
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci-throwaway
+      POSTGRES_DB: ci
     ports: ["15432:5432"]
-  rabbitmq:
-    image: rabbitmq:3-management
+
+  broker:              # 5673: AMQP, 15673: management UI
+    image: rabbitmq:3.13-management-alpine
     ports: ["5673:5672", "15673:15672"]
-  gitea:
-    image: gitea/gitea:latest
+
+  forge:               # 3001: Gitea web, 2223: its SSH server
+    image: gitea/gitea:1.22
     ports: ["3001:3000", "2223:22"]
-  flask-app:
-    image: nginx:alpine
+
+  web-8787:            # 8787: the service the scenario stops and restarts
+    image: httpd:2.4-alpine
     ports: ["8787:80"]

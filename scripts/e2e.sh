@@ -171,8 +171,11 @@ agh_template() {
   echo "run1 $ip: $p1"
   for p in "${want[@]}" 8787; do has "$p1" "$p" || fail "run1: port $p not detected on $ip"; done
 
-  log "stop the service on 8787 (flask-app)"
-  "${TPL[@]}" stop flask-app
+  # Compose service behind 8787: flask-app in the AGH template, set
+  # E2E_AGH_FLAP_SERVICE for another stack (CI: web-8787).
+  local flap="${E2E_AGH_FLAP_SERVICE:-flask-app}"
+  log "stop the service on 8787 ($flap)"
+  "${TPL[@]}" stop "$flap"
   wait_port 8787 closed || fail "8787 still open after stop"
   r2=$(scan run2)
   p2=$(ports_of "$r2")
@@ -183,7 +186,7 @@ agh_template() {
     || fail "run2: no 'gone' change for $ip:8787"
 
   log "restore the service on 8787"
-  "${TPL[@]}" up -d flask-app
+  "${TPL[@]}" up -d "$flap"
   wait_port 8787 open || fail "8787 not back"
   r3=$(scan run3)
   p3=$(ports_of "$r3")

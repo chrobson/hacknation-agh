@@ -1,9 +1,9 @@
-# Stand-in for the AGH lab template "modern-proxy" stack (WordPress behind
-# Traefik behind Toxiproxy), used by scripts/e2e-toxi.sh. Same upstream
-# images and default host ports as the template README table; the template
-# files themselves are not copied (licence unknown). Host ports can be moved
-# (TOXI_WEB_PORT, TOXI_DASH_PORT, TOXI_API_PORT) so the stack can run next to
-# another copy. The proxy "wordpress" (listen :8666) is created by the script.
+# Fault-injection lab for scripts/e2e-toxi.sh, written for this repository:
+# WordPress (MariaDB) behind Toxiproxy behind Traefik, the same kind of
+# stack as the AGH "modern-proxy" scenario, without any of its files. Host
+# ports can be moved (TOXI_WEB_PORT, TOXI_DASH_PORT, TOXI_API_PORT) so the
+# stack can run next to another copy. The proxy "wordpress" (listen :8666)
+# is created by the script. Passwords are throwaway CI values.
 name: ${TOXI_PROJECT:-asi-toxi-lab}
 
 services:

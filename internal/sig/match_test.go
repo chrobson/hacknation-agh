@@ -125,6 +125,8 @@ func scenarios() []scenario {
 		// nginx names only the server: the login form stays reported.
 		{name: "nginx-login", svc: svc(8094, ""), obs: httpObs(8094, "Sign in",
 			`<form><input type="password" name="pw"></form>`, map[string][]string{"Server": {"nginx/1.25.3"}})},
+		// go-httpbin (Go port of httpbin) names itself only in the title.
+		{name: "go-httpbin", svc: svc(8888, ""), obs: httpObs(8888, "go-httpbin(1): HTTP Client Testing Service", "<h1>go-httpbin(1)</h1>", nil)},
 		{name: "favicon-and-dirlisting", svc: svc(8093, ""), obs: httpObs(8093, "Index of /", "<h1>Index of /</h1>", nil)},
 	}
 }

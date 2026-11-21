@@ -1,11 +1,13 @@
+# Traefik file provider for ci/agh-proxy.yml: every request on the web
+# entry point goes to the Toxiproxy listener in front of WordPress.
 http:
   routers:
-    wordpress:
+    to-toxiproxy:
       entryPoints: [web]
       rule: PathPrefix(`/`)
-      service: wordpress-service
+      service: toxiproxy-wp
   services:
-    wordpress-service:
+    toxiproxy-wp:
       loadBalancer:
         servers:
           - url: "http://toxiproxy:8666"

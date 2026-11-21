@@ -1,6 +1,6 @@
 # Linux proof of the localhost scenario that the jury runs: the app in the
 # host network namespace (compose.host.yml, nmap -sS as root inside the
-# container), the AGH custom-network services published on the runner,
+# container), the services of ci/agh-custom-network.yml published on the runner,
 # scripts/e2e.sh agh-template (scan, stop 8787, scan, restore, scan,
 # asi verify). DefectDojo is skipped (too large for a hosted runner).
 name: e2e-agh
@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 30
     env:
       E2E_AGH_MODE: host
+      E2E_AGH_FLAP_SERVICE: web-8787
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +42,7 @@ jobs:
           make env
           ./scripts/doctor.sh --db-port
 
-      - name: AGH lab stand-in (ci/agh-custom-network.yml)
+      - name: CI lab (ci/agh-custom-network.yml)
         run: |
           dir="$RUNNER_TEMP/agh-lab"
           mkdir -p "$dir"
