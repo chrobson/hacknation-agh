@@ -1,0 +1,41 @@
+{{define "title"}}Role · Attack Surface Intelligence{{end}}
+{{define "nav"}}{{template "authnav" .}}{{end}}
+{{define "content"}}
+<h1>Role i uprawnienia</h1>
+{{template "flash" .}}
+<table>
+  <thead><tr><th>Rola</th><th>Uprawnienia</th><th>Użytkownicy</th><th></th></tr></thead>
+  <tbody>
+  {{range .Roles}}
+    <tr>
+      <td>{{.Name}}{{if .Builtin}} <em>(wbudowana)</em>{{end}}</td>
+      <td>{{range $i, $p := .Perms}}{{if $i}}, {{end}}<span title="{{$p.Name}}">{{$p.Label}}</span>{{end}}</td>
+      <td>{{.Users}}</td>
+      <td>
+        {{if and (not .Builtin) (eq .Users 0)}}
+        <form method="post" action="/admin/roles/{{.ID}}/delete" class="inline"
+              onsubmit="return confirm('Usunąć rolę {{.Name}}?')">
+          <button type="submit">Usuń</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>Nowa rola</h2>
+  <form method="post" action="/admin/roles">
+    <label>Nazwa roli <input name="name" maxlength="64" required></label>
+    <fieldset>
+      <legend>Uprawnienia</legend>
+      {{range .AllPerms}}
+      <label class="check"><input type="checkbox" name="perm" value="{{.Name}}"> {{.Label}} <code>{{.Name}}</code></label>
+      {{end}}
+    </fieldset>
+    <button type="submit">Utwórz rolę</button>
+  </form>
+</section>
+{{end}}
+{{template "base" .}}

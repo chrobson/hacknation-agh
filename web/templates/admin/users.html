@@ -1,0 +1,43 @@
+{{define "title"}}Użytkownicy · Attack Surface Intelligence{{end}}
+{{define "nav"}}{{template "authnav" .}}{{end}}
+{{define "content"}}
+<h1>Użytkownicy</h1>
+{{template "flash" .}}
+<table>
+  <thead><tr><th>Login</th><th>Rola</th><th>Utworzony</th><th>Zmiana roli</th></tr></thead>
+  <tbody>
+  {{$roles := .Roles}}
+  {{range .Users}}
+    <tr>
+      <td>{{.Login}}{{if .Self}} <em>(ty)</em>{{end}}</td>
+      <td>{{.RoleName}}</td>
+      <td>{{.CreatedAt}}</td>
+      <td>
+        {{if .Self}}—{{else}}
+        <form method="post" action="/admin/users/{{.ID}}/role" class="inline">
+          {{$cur := .RoleID}}
+          <select name="role_id" aria-label="Rola użytkownika {{.Login}}">
+            {{range $roles}}<option value="{{.ID}}"{{if eq .ID $cur}} selected{{end}}>{{.Name}}</option>{{end}}
+          </select>
+          <button type="submit">Zmień</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>Nowy użytkownik</h2>
+  <form method="post" action="/admin/users">
+    <label>Login <input name="login" maxlength="64" required></label>
+    <label>Hasło (min. 8 znaków) <input type="password" name="password" minlength="8" autocomplete="new-password" required></label>
+    <label>Rola
+      <select name="role_id">{{range .Roles}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+    </label>
+    <button type="submit">Utwórz użytkownika</button>
+  </form>
+</section>
+{{end}}
+{{template "base" .}}
