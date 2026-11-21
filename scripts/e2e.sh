@@ -8,7 +8,8 @@
 #   scripts/e2e.sh agh-template
 #                          AGH custom-network template on localhost (see
 #                          agh_template below): scan, stop the service on
-#                          8787, rescan, restore, rescan.
+#                          8787, rescan, restore, rescan (gone, new,
+#                          unstable), asi verify of run3.
 # In smoke/full nmap runs only inside the app container attached to the lab
 # network.
 set -euo pipefail
@@ -163,6 +164,42 @@ agh_template() {
   for p in "${want[@]}" 8787; do has "$p3" "$p" || fail "run3: port $p missing on $ip"; done
   [ "$(psql_db "SELECT count(*) FROM changes WHERE run_id=$r3 AND kind='new' AND ip='$ip' AND port=8787")" = 1 ] \
     || fail "run3: no 'new' change for $ip:8787"
+  # Two flips (gone, back) within ASI_UNSTABLE_WINDOW make the service
+  # unstable (ASI_UNSTABLE_IF_FLIPS=2); the host itself stays up.
+  [ "$(psql_db "SELECT count(*) FROM changes WHERE run_id=$r3 AND kind='unstable' AND ip='$ip' AND port=8787")" = 1 ] \
+    || fail "run3: no 'unstable' change for $ip:8787"
+  [ "$(psql_db "SELECT state FROM host_state WHERE ip='$ip'")" = up ] || fail "host $ip not up"
+
+  log "asi verify run3 against the expected state"
+  # Expected state: the template ports with their detections, plus the other
+  # ports of this host seen in all three runs (services outside the template
+  # that run on this machine); changes: 8787 back and unstable.
+  python3 - "$ip" "$p1" "$p2" "$p3" > "$out/expected_run3.json" <<'PY'
+import json, sys
+ip, runs = sys.argv[1], [set(map(int, a.split())) for a in sys.argv[2:5]]
+tpl = {8787: [], 8888: ["httpbin"], 15432: ["postgresql"], 5673: ["rabbitmq-amqp"],
+       15673: ["rabbitmq-management"], 3001: ["gitea"], 2223: []}
+other = (runs[0] & runs[1] & runs[2]) - set(tpl)
+svcs = [{"port": p, "proto": "tcp", "in_top1000": True, "detections": d} for p, d in sorted(tpl.items())]
+svcs += [{"port": p, "proto": "tcp", "in_top1000": False, "detections": []} for p in sorted(other)]
+print(json.dumps({"run": "agh-run3", "network": ip + "/32", "infra": [],
+    "hosts": [{"ip": ip, "name": "docker-host", "services": svcs}],
+    "changes_from_prev": [{"kind": k, "ip": ip, "port": 8787, "proto": "tcp", "in_top1000": True}
+                          for k in ("new", "unstable")]}))
+PY
+  put "$out/expected_run3.json" /tmp/asi-agh-expected.json
+  asi verify /tmp/asi-agh-expected.json -run "$r3" -min 0.9 > "$out/verify_run3.json" || true
+  python3 - "$out/verify_run3.json" <<'PY' || fail "asi verify run3"
+import json, sys
+r = json.load(open(sys.argv[1]))
+for m in ("hosts", "services", "detections", "changes"):
+    x = r[m]
+    print(f"  {m:10s} P={x['precision']} R={x['recall']} (tp={x['tp']} fp={x['fp']} fn={x['fn']})"
+          + (f" missing={x['missing']}" if x["missing"] else "") + (f" unexpected={x['unexpected']}" if x["unexpected"] else ""))
+assert r["pass"], r.get("failures")
+assert r["changes"]["recall"] == 1, r["changes"]
+assert r["detections"]["recall"] == 1, r["detections"]
+PY
 
   log "changes per run (target $ip)"
   psql_db "SELECT run_id, kind, port, field, left(coalesce(nullif(new,''),old), 60) FROM changes

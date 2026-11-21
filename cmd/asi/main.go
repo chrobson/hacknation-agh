@@ -123,6 +123,12 @@ func serve(ctx context.Context, d web.Deps) error {
 	if err := auth.Seed(ctx, d.DB, d.Config); err != nil {
 		return fmt.Errorf("seed users: %w", err)
 	}
+	// A fresh database gets one manual configuration covering every target,
+	// so "Skanuj teraz" works right after adding targets.
+	if _, err := d.DB.Exec(ctx, `INSERT INTO scan_configs (name, target_ids)
+		SELECT $1, '{}' WHERE NOT EXISTS (SELECT 1 FROM scan_configs)`, DefaultConfigName); err != nil {
+		return fmt.Errorf("default scan configuration: %w", err)
+	}
 	core, err := app.NewCore(ctx, d)
 	if err != nil {
 		return err

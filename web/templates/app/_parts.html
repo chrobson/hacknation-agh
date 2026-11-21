@@ -1,5 +1,5 @@
 {{define "nav"}}{{end}}
 {{define "flash"}}{{if .Message}}<p class="flash ok" role="status">{{.Message}}</p>{{end}}{{if .Error}}<p class="flash err" role="alert">{{.Error}}</p>{{end}}{{end}}
-{{define "runstatus"}}{{if and .Stopped .Open}}<span class="badge run-paused">zatrzymany</span>{{else}}<span class="badge run-{{.Status}}">{{runLabel .Status}}</span>{{end}}{{end}}
+{{define "runstatus"}}{{if and .Stopped .Open}}<span class="badge run-paused">zatrzymany</span>{{else if .Processing}}<span class="badge run-running" title="skan zakończony, trwa sondowanie HTTP, sygnatury i porównanie z poprzednim przebiegiem">przetwarzanie</span>{{else}}<span class="badge run-{{.Status}}">{{runLabel .Status}}</span>{{end}}{{end}}
 {{define "progress"}}{{if .ChunksTotal}}<progress max="{{.ChunksTotal}}" value="{{.ChunksDone}}"></progress> {{.ChunksDone}}/{{.ChunksTotal}} chunków{{if .ChunksFail}}, <span class="bad">{{.ChunksFail}} błędnych</span>{{end}}{{else}}–{{end}}{{end}}
 {{define "dets"}}{{range .}}<span class="badge cat-{{.Category}}{{with .Severity}} sev-{{.}}{{end}}" title="{{catLabel .Category}}, pewność {{.Confidence}}%{{with .Severity}}, poziom {{.}}{{end}}">{{.Name}}</span> {{end}}{{end}}

@@ -107,8 +107,20 @@ func ApplyRunTx(ctx context.Context, tx pgx.Tx, runID int64, cfg Config, now tim
 			}
 			if lc := LatencyChanges(prev, curr, lat); len(lc) > 0 {
 				res.Changes = append(res.Changes, lc...)
-				SortChanges(res.Changes)
 			}
+			// A service that keeps disappearing and coming back is unstable.
+			var keys []model.AssetKey
+			for _, c := range res.Changes {
+				if c.Kind == model.ChangeNew || c.Kind == model.ChangeGone {
+					keys = append(keys, c.Key)
+				}
+			}
+			prior, err := store.DiffServiceFlips(ctx, tx, runID, keys, PriorRuns(cfg))
+			if err != nil {
+				return res, fmt.Errorf("service flips: %w", err)
+			}
+			res.Changes = append(res.Changes, ServiceInstability(res.Changes, prior, cfg)...)
+			SortChanges(res.Changes)
 		}
 		for i := range res.Changes {
 			res.Changes[i].RunID = runID

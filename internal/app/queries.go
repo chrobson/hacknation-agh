@@ -27,7 +27,13 @@ type RunRow struct {
 	Services    int
 	Stopped     bool // stopped by a user; the scheduler leaves it alone
 	Active      bool // executing in this process
+	Applied     bool // post-processing (fingerprinting, signatures, diff) finished
 }
+
+// Processing reports a finished scan whose post-processing (HTTP
+// fingerprinting, signatures, diff) is still running: its detections and
+// changes are incomplete.
+func (r RunRow) Processing() bool { return r.Status == "done" && r.Kind == "scan" && !r.Applied }
 
 // Percent is the share of finished chunks.
 func (r RunRow) Percent() int {
@@ -56,7 +62,8 @@ const runCols = `r.id, r.config_id, COALESCE(c.name, ''), r.kind, r.status, r.st
 	(SELECT count(*) FROM scan_chunks k WHERE k.run_id = r.id AND k.status = 'done'),
 	(SELECT count(*) FROM scan_chunks k WHERE k.run_id = r.id AND k.status = 'failed'),
 	(SELECT count(*) FROM host_obs h WHERE h.run_id = r.id AND h.up),
-	(SELECT count(*) FROM services s WHERE s.run_id = r.id), r.stopped`
+	(SELECT count(*) FROM services s WHERE s.run_id = r.id), r.stopped,
+	EXISTS (SELECT 1 FROM diff_runs d WHERE d.run_id = r.id)`
 
 // Open reports whether the run can still continue (queued or paused).
 func (r RunRow) Open() bool { return r.Status == "queued" || r.Status == "paused" }
@@ -64,7 +71,7 @@ func (r RunRow) Open() bool { return r.Status == "queued" || r.Status == "paused
 func scanRun(row pgx.Row) (RunRow, error) {
 	var r RunRow
 	err := row.Scan(&r.ID, &r.ConfigID, &r.ConfigName, &r.Kind, &r.Status, &r.StartedAt, &r.FinishedAt, &r.DurationMS,
-		&r.ChunksTotal, &r.ChunksDone, &r.ChunksFail, &r.HostsUp, &r.Services, &r.Stopped)
+		&r.ChunksTotal, &r.ChunksDone, &r.ChunksFail, &r.HostsUp, &r.Services, &r.Stopped, &r.Applied)
 	return r, err
 }
 
@@ -96,11 +103,12 @@ func GetRun(ctx context.Context, db *pgxpool.Pool, id int64) (RunRow, error) {
 // LatestDoneRun returns the id of the newest finished scan run, or of the
 // newest finished import when no scan has finished yet (0 if none). An
 // import holds only the hosts in its file, so it is never preferred over a
-// full scan for the dashboard and result defaults.
+// full scan for the dashboard and result defaults. A scan still in
+// post-processing (no diff yet) is skipped while an older one is available.
 func LatestDoneRun(ctx context.Context, db *pgxpool.Pool) (int64, error) {
 	var id int64
-	err := db.QueryRow(ctx, `SELECT id FROM scan_runs WHERE status='done'
-		ORDER BY (kind = 'scan') DESC, id DESC LIMIT 1`).Scan(&id)
+	err := db.QueryRow(ctx, `SELECT id FROM scan_runs r WHERE status='done'
+		ORDER BY (kind = 'scan') DESC, EXISTS (SELECT 1 FROM diff_runs d WHERE d.run_id = r.id) DESC, id DESC LIMIT 1`).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}

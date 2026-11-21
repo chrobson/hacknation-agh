@@ -77,3 +77,31 @@ func allPortsForTest() []int {
 	}
 	return ps
 }
+
+func TestDeepPortsCap(t *testing.T) {
+	var ports []int
+	ports = append(ports, 2223, 15432)
+	for p := 21000; p <= 21010; p++ { // FTP passive range
+		ports = append(ports, p)
+	}
+	for p := 50000; p < 50040; p += 2 { // ephemeral, 20 ports
+		ports = append(ports, p)
+	}
+	ports = append(ports, 8787, 8888)
+	slices.Sort(ports)
+	got := DeepPorts(ports)
+	if len(got) != MaxDeepPorts {
+		t.Fatalf("len = %d, want %d", len(got), MaxDeepPorts)
+	}
+	for _, p := range []int{2223, 8787, 8888, 15432} {
+		if !slices.Contains(got, p) {
+			t.Errorf("service port %d dropped: %v", p, got)
+		}
+	}
+	if !slices.IsSorted(got) {
+		t.Errorf("not sorted: %v", got)
+	}
+	if short := []int{1, 2, 3}; !slices.Equal(DeepPorts(short), short) {
+		t.Errorf("short list changed")
+	}
+}

@@ -607,7 +607,7 @@ func portsLabel(c store.ScanConfig, allMax int) string {
 		return s
 	default:
 		if allMax > 0 {
-			return fmt.Sprintf("auto: -p- do %d adresów, inaczej top %d", allMax, c.TopPorts)
+			return fmt.Sprintf("auto: -p- dla celów do %d adresów, większe: top %d", allMax, c.TopPorts)
 		}
 		return fmt.Sprintf("auto: top %d", c.TopPorts)
 	}

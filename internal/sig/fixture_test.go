@@ -275,7 +275,7 @@ func TestServiceSignatureFixtures(t *testing.T) {
 		{6379, []wantDet{{id: "redis", severity: model.SevLow, version: "7.2.4"}, {id: "redis-noauth", severity: model.SevHigh, version: "7.2.4"}}},
 		{6380, []wantDet{{id: "redis", severity: model.SevLow}}},
 		{6381, []wantDet{{id: "redis", severity: model.SevLow}}},
-		{15432, []wantDet{{id: "postgresql", severity: model.SevMedium, version: "9.6.0"}}},
+		{15432, []wantDet{{id: "postgresql", severity: model.SevMedium}}}, // "9.6.0 or later": no version
 	}
 	for _, c := range cases {
 		t.Run(strconv.Itoa(int(c.port)), func(t *testing.T) {
@@ -325,5 +325,29 @@ func TestDojoFindingsForLabSignatures(t *testing.T) {
 	}
 	if n != len(want) {
 		t.Fatalf("found %d of %d findings: %+v", n, len(want), fs)
+	}
+}
+
+func TestPostgresVersionBound(t *testing.T) {
+	sigs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := NewEngine(sigs, &fakeFetcher{})
+	for version, want := range map[string]string{"9.6.0 or later": "", "16.0 - 16.2": "16.0", "16.4": "16.4"} {
+		svc := model.ServiceObs{ID: 1, Key: model.AssetKey{IP: netip.MustParseAddr("127.0.0.1"), Port: 5432, Proto: "tcp"},
+			Product: "PostgreSQL DB", Version: version, Banner: "postgresql"}
+		var got *model.Detection
+		for _, d := range e.MatchContext(context.Background(), svc, model.HTTPObs{}) {
+			if d.SignatureID == "postgresql" {
+				got = &d
+			}
+		}
+		if got == nil {
+			t.Fatalf("%q: postgresql not detected", version)
+		}
+		if got.Evidence["version"] != want {
+			t.Errorf("%q: version %q, want %q", version, got.Evidence["version"], want)
+		}
 	}
 }

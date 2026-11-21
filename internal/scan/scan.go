@@ -32,7 +32,7 @@ type Opts struct {
 // similar services on non-standard ports.
 const DeepIntensity = 4
 
-// MaxDeepPorts caps the ports of one DeepUnknown pass.
+// MaxDeepPorts caps the ports of one DeepUnknown pass (see DeepPorts).
 const MaxDeepPorts = 32
 
 // DefaultExtraPorts are TCP ports outside nmap's top 1000 that commonly host

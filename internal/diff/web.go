@@ -587,7 +587,7 @@ func safeReturn(s string) string {
 var kindLabels = map[model.ChangeKind]string{
 	model.ChangeHostUp:   "Nowe lub ponownie aktywne hosty",
 	model.ChangeHostDown: "Hosty, które przestały odpowiadać",
-	model.ChangeUnstable: "Hosty niestabilne",
+	model.ChangeUnstable: "Niestabilne hosty i usługi",
 	model.ChangeNew:      "Nowe usługi",
 	model.ChangeGone:     "Zniknięte usługi",
 	model.ChangeChanged:  "Zmienione usługi",

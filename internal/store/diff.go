@@ -289,6 +289,56 @@ func InsertChanges(ctx context.Context, tx pgx.Tx, cs []model.Change) error {
 	return err
 }
 
+// DiffServiceFlips counts, per service key, the new/gone changes recorded in
+// the last n diffed scan runs before runID (imports excluded). Keys without
+// any such change are absent from the result.
+func DiffServiceFlips(ctx context.Context, db DiffDB, runID int64, keys []model.AssetKey, n int) (map[model.AssetKey]int, error) {
+	out := map[model.AssetKey]int{}
+	if len(keys) == 0 || n <= 0 {
+		return out, nil
+	}
+	var ip, proto, vh []string
+	var port []int32
+	for _, k := range keys {
+		ip = append(ip, k.IP.Unmap().String())
+		port = append(port, int32(k.Port))
+		proto = append(proto, k.Proto)
+		vh = append(vh, k.VHost)
+	}
+	rows, err := db.Query(ctx, `
+		WITH runs AS (
+			SELECT d.run_id FROM diff_runs d JOIN scan_runs r ON r.id = d.run_id
+			WHERE r.kind = 'scan' AND d.run_id < $1
+			ORDER BY d.run_id DESC LIMIT $2
+		), k AS (
+			SELECT i::inet AS ip, po AS port, pr AS proto, v AS vhost
+			FROM unnest($3::text[], $4::int[], $5::text[], $6::text[]) AS t(i, po, pr, v)
+		)
+		SELECT host(c.ip), c.port, c.proto, c.vhost, count(*)
+		FROM changes c JOIN k ON c.ip = k.ip AND c.port = k.port AND c.proto = k.proto AND c.vhost = k.vhost
+		WHERE c.run_id IN (SELECT run_id FROM runs) AND c.kind IN ('new', 'gone')
+		GROUP BY 1, 2, 3, 4`,
+		runID, n, ip, port, proto, vh)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k model.AssetKey
+		var a string
+		var p, cnt int
+		if err := rows.Scan(&a, &p, &k.Proto, &k.VHost, &cnt); err != nil {
+			return nil, err
+		}
+		if k.IP, err = parseAddr(a); err != nil {
+			return nil, err
+		}
+		k.Port = uint16(p)
+		out[k] = cnt
+	}
+	return out, rows.Err()
+}
+
 // ListChanges returns the changes of one run ordered by key.
 func ListChanges(ctx context.Context, db DiffDB, runID int64) ([]model.Change, error) {
 	rows, err := db.Query(ctx, `

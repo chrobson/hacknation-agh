@@ -6,11 +6,11 @@ Jedno binarium `asi` w Go, PostgreSQL z pg_tde, interfejs WWW renderowany po str
 
 ## Szybki start
 
-Wymagania: Docker z Compose v2, `make`, `openssl`.
+Wymagania: Docker z Compose v2 (tryb sieci hosta `make up-host` wymaga Compose 2.24 lub nowszego, bo `compose.host.yml` używa `!reset`), `make`, `openssl`. Interfejs domyślnie nasłuchuje na porcie 9080 hosta (`ASI_PORT`), żeby nie kolidować z usługami na 8080.
 
 ```sh
 make env                 # .env z losowym hasłem bazy, kluczem AES i hasłami 4 użytkowników (gitignored)
-make up                  # baza z pg_tde + aplikacja na http://127.0.0.1:8080
+make up                  # baza z pg_tde + aplikacja na http://127.0.0.1:9080
 grep ASI_SEED_PASSWORD .env   # hasła użytkowników admin / editor / analyst / viewer
 ```
 
@@ -21,7 +21,7 @@ lab/change.sh run1       # laboratorium w wariancie run1
 make up-lab              # aplikacja dołączona do sieci laboratorium (nmap w kontenerze, -sS)
 ```
 
-Następnie w przeglądarce: **Cele** → dodaj `10.20.0.0/18` i `staging.lab.local`, **Skany** → „Skanuj teraz”.
+Następnie w przeglądarce: **Cele** → dodaj `10.20.0.0/18` i `staging.lab.local`, **Skany** → „Skanuj teraz” przy konfiguracji „Wszystkie cele” (tworzona automatycznie przy pierwszym starcie na pustej bazie; własną dodasz przyciskiem „Nowa konfiguracja”). Przebieg ma status „przetwarzanie”, dopóki trwa sondowanie HTTP, sygnatury i porównanie z poprzednim przebiegiem; wyniki i zmiany są kompletne, gdy status zmieni się na „zakończony”.
 Kolejne warianty (`lab/change.sh run2`, `run3`) pokazują nowe, znikające i zmienione usługi oraz host niestabilny.
 
 Testy:
@@ -44,12 +44,12 @@ Usługi opublikowane przez Dockera na hoście (`ports: "8787:80"`) są widoczne 
 | natywnie | `make native` (baza w Dockerze na `127.0.0.1:${ASI_DB_PORT:-55432}`, `bin/asi serve` i `nmap` na hoście) | `localhost` | każdy system z zainstalowanym nmapem |
 
 - W trybie `host.docker.internal` nazwa wskazuje bramę do hosta (Docker Desktop `192.168.65.254`, OrbStack `0.250.250.254`, Linux `172.17.0.1`). `compose.hostgw.yml` ustawia `ASI_ALLOW_HOSTS=host.docker.internal`: aplikacja przy starcie rozwiązuje tę nazwę i dopisuje każdy adres do allowlisty. Na Linuksie przez bramę widać tylko porty opublikowane na `0.0.0.0` (nie na `127.0.0.1`).
-- W trybie sieci hosta interfejs nasłuchuje na `127.0.0.1:${ASI_PORT:-8080}` hosta, a baza jest opublikowana na `127.0.0.1:${ASI_DB_PORT:-55432}`.
+- W trybie sieci hosta interfejs nasłuchuje na `127.0.0.1:${ASI_PORT:-9080}` hosta, a baza jest opublikowana na `127.0.0.1:${ASI_DB_PORT:-55432}`.
 - Natywnie: `asi scan`, `asi import` itd. wymagają `ASI_DATABASE_URL=postgres://asi:<ASI_DB_PASSWORD>@127.0.0.1:55432/asi?sslmode=disable` (cel `make native` ustawia go sam). Bez uprawnień roota nmap używa skanu connect (`-sT`), co dla loopbacku wystarcza.
 - `localhost` rozwiązuje się na `127.0.0.1` i `::1`; oba adresy są skanowane (IPv6 osobnym wywołaniem `nmap -6`).
 - IP hosta lub sieć LAN: dopisz je do `ASI_ALLOWED_CIDRS` w `.env`, np. `ASI_ALLOWED_CIDRS=10.20.0.0/18,127.0.0.0/8,::1/128,192.168.1.10/32` (lub `192.168.1.0/24`), albo podaj nazwę w `ASI_ALLOW_HOSTS`, po czym zrestartuj aplikację. Pojedyncze adresy, CIDR i nazwy spoza listy są odrzucane przy imporcie i przed uruchomieniem nmapa.
 
-**Profil portów** (formularz konfiguracji skanu): `automatyczny` (domyślny) skanuje wszystkie porty TCP (`-p-`), gdy cele obejmują łącznie najwyżej `ASI_ALL_PORTS_MAX_ADDRS` adresów (domyślnie 16, czyli `localhost` czy /28), a w przeciwnym razie najpopularniejsze porty z dodatkowym przebiegiem; `najpopularniejsze + dodatkowe` (top N, typowe porty infrastruktury i własna lista dodatkowych portów, np. `3001,8787,15432`); `własna lista`; `wszystkie` (`-p-`). Usługi Dockera często siedzą poza top 1000 (8787, 15432, 15673, 3001, 2223), dlatego dla małych celów domyślnie skanowane są wszystkie porty. `ASI_SCAN_PORTS` nadal ogranicza każdy profil.
+**Profil portów** (formularz konfiguracji skanu): `automatyczny` (domyślny) skanuje wszystkie porty TCP (`-p-`) w każdym fragmencie celów (chunku) obejmującym najwyżej `ASI_ALL_PORTS_MAX_ADDRS` adresów (domyślnie 16, czyli `localhost`, pojedynczy adres czy /28), a w większych fragmentach najpopularniejsze porty z dodatkowym przebiegiem. Decyzja zapada osobno dla każdego fragmentu, więc dopisanie sieci /24 do `localhost` nie wyłącza `-p-` dla `localhost`; `najpopularniejsze + dodatkowe` (top N, typowe porty infrastruktury i własna lista dodatkowych portów, np. `3001,8787,15432`); `własna lista`; `wszystkie` (`-p-`). Usługi Dockera często siedzą poza top 1000 (8787, 15432, 15673, 3001, 2223), dlatego dla małych celów domyślnie skanowane są wszystkie porty. `ASI_SCAN_PORTS` nadal ogranicza każdy profil.
 
 Test end-to-end na szablonie labu AGH (`docker-compose-custom-network.yml`: httpbin 8888, PostgreSQL 15432, RabbitMQ 5673/15673, Gitea 3001/2223, nginx 8787). Pliki szablonu nie są częścią repozytorium; `ASI_AGH_LAB_DIR` wskazuje katalog z nimi (domyślnie `notes/lab-agh`):
 
@@ -58,7 +58,11 @@ ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh make e2e-agh                     # tryb do
 ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh E2E_AGH_MODE=native ./scripts/e2e.sh agh-template
 ```
 
-Skrypt uruchamia stack szablonu, skanuje host (profil automatyczny, `-p-`), zatrzymuje usługę na 8787, skanuje ponownie, przywraca ją i skanuje trzeci raz. Sprawdza, że porty szablonu są wykryte w każdym przebiegu, że 8787 znika w drugim (zmiana `gone`) i wraca w trzecim (zmiana `new`), po czym usuwa stack szablonu (`E2E_KEEP=1` zostawia aplikację).
+Skrypt uruchamia stack szablonu, skanuje host (profil automatyczny, `-p-`), zatrzymuje usługę na 8787, skanuje ponownie, przywraca ją i skanuje trzeci raz. Sprawdza, że porty szablonu są wykryte w każdym przebiegu, że 8787 znika w drugim (zmiana `gone`) i wraca w trzecim (zmiany `new` i `unstable`, host pozostaje `up`), porównuje trzeci przebieg ze stanem oczekiwanym przez `asi verify`, po czym usuwa stack szablonu (`E2E_KEEP=1` zostawia aplikację).
+
+**Usługa niestabilna**: usługa, która w ostatnich `ASI_UNSTABLE_WINDOW` przebiegach (domyślnie 5) zniknęła lub pojawiła się co najmniej `ASI_UNSTABLE_IF_FLIPS` razy (domyślnie 2), dostaje zmianę `unstable` przy każdym kolejnym zniknięciu lub powrocie. Scenariusz quickstart (`stop flask-app` → skan → przywrócenie → skan) daje więc `gone`, a potem `new` i `unstable` dla 8787. Gdy niestabilny jest cały host, zmiana `unstable` dotyczy hosta, a nie każdej jego usługi.
+
+Szybkość: formularz konfiguracji proponuje 1000 pakietów/s; skan `-p-` jednego hosta trwa wtedy około 3 minut, a przy 5000 pakietów/s około 2 minut (wyższe tempo jest bezpieczne dla loopbacku, nie dla cudzej sieci).
 
 ## Polecenia
 

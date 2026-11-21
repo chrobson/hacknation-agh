@@ -235,7 +235,15 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 	if err != nil {
 		r.log().Warn("cannot load targets for hostnames", "run", runID, "err", err)
 	}
-	pp, err := ResolvePorts(cfg, CountAddrs(plan.Chunks), r.AllPortsMaxAddrs, r.AllowedPorts, r.ExtraPorts)
+	// The auto profile is decided per chunk, not for the run as a whole: a
+	// small chunk (a single address, a /28) gets every port and the deep
+	// version pass even when the run also covers a large range, so adding a
+	// /24 to localhost does not silently drop -p- (and report its ports gone).
+	small, err := ResolvePorts(cfg, 1, r.AllPortsMaxAddrs, r.AllowedPorts, r.ExtraPorts)
+	if err != nil {
+		return fmt.Errorf("konfiguracja %q: %w", cfg.Name, err)
+	}
+	large, err := ResolvePorts(cfg, 1<<62, r.AllPortsMaxAddrs, r.AllowedPorts, r.ExtraPorts)
 	if err != nil {
 		return fmt.Errorf("konfiguracja %q: %w", cfg.Name, err)
 	}
@@ -253,16 +261,23 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 	if r.MaxRate > 0 && (rate <= 0 || rate > r.MaxRate) {
 		rate = r.MaxRate
 	}
-	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(rate, k), Privileged: r.Privileged,
-		ExtraPorts: pp.Extra, Ports: pp.Ports}
-	// Small targets (localhost, a /28) also get a deeper version pass over
+	base := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(rate, k), Privileged: r.Privileged}
+	smallOpts, largeOpts := base, base
+	smallOpts.Ports, smallOpts.ExtraPorts = small.Ports, small.Extra
+	largeOpts.Ports, largeOpts.ExtraPorts = large.Ports, large.Extra
+	// Small chunks (localhost, a /28) also get a deeper version pass over
 	// the ports the light pass left unnamed (e.g. PostgreSQL on 15432).
-	if addrs := CountAddrs(plan.Chunks); r.AllPortsMaxAddrs > 0 && addrs > 0 && addrs <= uint64(r.AllPortsMaxAddrs) {
-		opts.DeepUnknown = true
+	smallOpts.DeepUnknown = r.AllPortsMaxAddrs > 0
+	optsFor := func(p netip.Prefix) scan.Opts {
+		if r.AllPortsMaxAddrs > 0 && CountAddrs([]netip.Prefix{p}) <= uint64(r.AllPortsMaxAddrs) {
+			return smallOpts
+		}
+		return largeOpts
 	}
-	r.log().Info("scan port profile", "run", runID, "profile", pp.Profile, "explicit_ports", len(pp.Ports),
-		"top_ports", cfg.TopPorts, "extra_ports", len(pp.Extra), "deep_unknown", opts.DeepUnknown)
-	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", opts.MaxRate)
+	r.log().Info("scan port profile", "run", runID, "profile_small_chunks", small.Profile,
+		"profile_large_chunks", large.Profile, "small_chunk_max_addrs", r.AllPortsMaxAddrs,
+		"top_ports", cfg.TopPorts, "extra_ports", len(large.Extra))
+	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", base.MaxRate)
 
 	var wg sync.WaitGroup
 	errc := make(chan error, k)
@@ -270,7 +285,7 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := r.worker(ctx, runID, opts, plan.Hostnames); err != nil {
+			if err := r.worker(ctx, runID, optsFor, plan.Hostnames); err != nil {
 				errc <- err
 			}
 		}()
@@ -327,7 +342,7 @@ func PerWorkerRate(r, k int) int {
 	return max(r/max(k, 1), 1)
 }
 
-func (r *Runner) worker(ctx context.Context, runID int64, o scan.Opts, hostnames map[netip.Addr]string) error {
+func (r *Runner) worker(ctx context.Context, runID int64, optsFor func(netip.Prefix) scan.Opts, hostnames map[netip.Addr]string) error {
 	for ctx.Err() == nil {
 		c, ok, err := r.Store.LeaseChunk(ctx, runID)
 		if err != nil {
@@ -339,7 +354,7 @@ func (r *Runner) worker(ctx context.Context, runID int64, o scan.Opts, hostnames
 		if !ok {
 			return nil
 		}
-		if err := r.processChunk(ctx, c, o, hostnames); err != nil {
+		if err := r.processChunk(ctx, c, optsFor(c.Prefix), hostnames); err != nil {
 			return err
 		}
 	}

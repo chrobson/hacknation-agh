@@ -259,12 +259,17 @@ type fakeScanner struct {
 	block   map[netip.Prefix]bool
 	fail    map[netip.Prefix]bool
 	rates   []int
+	opts    map[netip.Prefix]scan.Opts // Discover options per chunk
 	started chan netip.Prefix
 }
 
 func (s *fakeScanner) Discover(ctx context.Context, ps []netip.Prefix, o scan.Opts) ([]netip.Addr, error) {
 	s.mu.Lock()
 	s.rates = append(s.rates, o.MaxRate)
+	if s.opts == nil {
+		s.opts = map[netip.Prefix]scan.Opts{}
+	}
+	s.opts[ps[0]] = o
 	block, fail := s.block[ps[0]], s.fail[ps[0]]
 	s.mu.Unlock()
 	if s.started != nil {

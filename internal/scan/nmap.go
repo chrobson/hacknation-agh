@@ -117,7 +117,7 @@ func (n *Nmap) Services(ctx context.Context, hosts []netip.Addr, o Opts) ([]mode
 			}
 		}
 		if o.DeepUnknown {
-			if ports := unknownPorts(out, group); len(ports) > 0 && len(ports) <= MaxDeepPorts {
+			if ports := DeepPorts(unknownPorts(out, group)); len(ports) > 0 {
 				res, err := n.run(ctx, DeepServiceArgs(group, ports, o))
 				if err != nil {
 					return nil, err
@@ -252,6 +252,42 @@ func unknownPorts(svcs []model.ServiceObs, group []netip.Addr) []int {
 	}
 	sort.Ints(ports)
 	return ports
+}
+
+// DeepPorts picks at most MaxDeepPorts of the unnamed ports for the deep
+// version pass instead of skipping it when there are more. Ports that look
+// like service ports come first; ports in the ephemeral range (49152+) and
+// runs of four or more consecutive ports (e.g. FTP passive 21000-21010) are
+// taken only while room is left. ports must be sorted; so is the result.
+func DeepPorts(ports []int) []int {
+	if len(ports) <= MaxDeepPorts {
+		return ports
+	}
+	inRun := make([]bool, len(ports))
+	for i := 0; i < len(ports); {
+		j := i
+		for j+1 < len(ports) && ports[j+1] == ports[j]+1 {
+			j++
+		}
+		if j-i+1 >= 4 {
+			for k := i; k <= j; k++ {
+				inRun[k] = true
+			}
+		}
+		i = j + 1
+	}
+	var first, rest []int
+	for i, p := range ports {
+		if p >= 49152 || inRun[i] {
+			rest = append(rest, p)
+		} else {
+			first = append(first, p)
+		}
+	}
+	out := append(first, rest...)
+	out = out[:MaxDeepPorts]
+	sort.Ints(out)
+	return out
 }
 
 // DeepServiceArgs builds the DeepUnknown pass over ports.

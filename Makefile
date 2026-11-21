@@ -37,7 +37,7 @@ native-db: env
 native: build native-db
 	set -a; . ./.env; set +a; \
 	ASI_DATABASE_URL="postgres://$${ASI_DB_USER:-asi}:$${ASI_DB_PASSWORD}@127.0.0.1:$${ASI_DB_PORT:-55432}/asi?sslmode=disable" \
-	ASI_HTTP_ADDR="127.0.0.1:$${ASI_PORT:-8080}" ./bin/asi serve
+	ASI_HTTP_ADDR="127.0.0.1:$${ASI_PORT:-9080}" ./bin/asi serve
 
 down:
 	docker compose -f compose.yml -f compose.lab.yml down

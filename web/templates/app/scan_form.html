@@ -18,7 +18,7 @@
     <div>
       <label for="f-profile">Profil portów TCP (faza 2)</label>
       <select id="f-profile" name="port_profile">
-        {{$cur := .Config.PortProfile}}{{range .Profiles}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{if eq . "auto"}}automatyczny: wszystkie porty dla małych celów{{if $.Data.AllPortsMax}} (do {{$.Data.AllPortsMax}} adresów){{end}}, inaczej najpopularniejsze{{else if eq . "top"}}najpopularniejsze porty + dodatkowe{{else if eq . "list"}}własna lista portów{{else if eq . "all"}}wszystkie porty 1–65535 (-p-){{end}}</option>{{end}}
+        {{$cur := .Config.PortProfile}}{{range .Profiles}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{if eq . "auto"}}automatyczny: wszystkie porty dla małych celów{{if $.Data.AllPortsMax}} (do {{$.Data.AllPortsMax}} adresów w fragmencie){{end}}, w większych najpopularniejsze{{else if eq . "top"}}najpopularniejsze porty + dodatkowe{{else if eq . "list"}}własna lista portów{{else if eq . "all"}}wszystkie porty 1–65535 (-p-){{end}}</option>{{end}}
       </select>
       <label for="f-top">Liczba najpopularniejszych portów TCP (profil automatyczny i „najpopularniejsze”)</label>
       <input id="f-top" name="top_ports" type="number" min="1" max="65535" value="{{.Config.TopPorts}}">

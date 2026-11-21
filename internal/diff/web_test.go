@@ -55,7 +55,7 @@ func TestTemplatesRender(t *testing.T) {
 			Groups:  GroupChanges(cs, map[model.AssetKey]store.Annotation{k: ann}),
 			CanEdit: true, Return: "/changes/2",
 		}, []string{
-			"Hosty, które przestały odpowiadać (1)", "Hosty niestabilne", "Zmienione usługi", "Zniknięte usługi",
+			"Hosty, które przestały odpowiadać (1)", "Niestabilne hosty i usługi", "Zmienione usługi", "Zniknięte usługi",
 			"wersja", "1.26.2", "panel &lt;b&gt;admina&lt;/b&gt;", "fałszywy alarm", "dodaj adnotację",
 			"return=%2Fchanges%2F2",
 		}},

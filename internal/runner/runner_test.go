@@ -201,3 +201,27 @@ func TestRunStatusAndRate(t *testing.T) {
 		t.Error("PerWorkerRate")
 	}
 }
+
+// The auto port profile is decided per chunk: a single address keeps -p- and
+// the deep version pass when the run also covers a large range.
+func TestAutoProfilePerChunk(t *testing.T) {
+	_, sc, r, cfg := setup(t,
+		model.Target{Kind: model.TargetCIDR, Value: "10.20.0.0/24"},
+		model.Target{Kind: model.TargetIP, Value: "10.20.9.9"},
+		model.Target{Kind: model.TargetCIDR, Value: "10.20.10.0/28"},
+	)
+	r.AllPortsMaxAddrs = 16
+	if _, err := r.RunConfig(context.Background(), cfg.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{"10.20.9.9/32", "10.20.10.0/28"} {
+		o := sc.opts[netip.MustParsePrefix(c)]
+		if len(o.Ports) != 65535 || !o.DeepUnknown {
+			t.Errorf("%s: ports=%d deep=%v, want all ports + deep pass", c, len(o.Ports), o.DeepUnknown)
+		}
+	}
+	o := sc.opts[netip.MustParsePrefix("10.20.0.0/24")]
+	if o.Ports != nil || o.DeepUnknown {
+		t.Errorf("/24: ports=%d deep=%v, want top ports without deep pass", len(o.Ports), o.DeepUnknown)
+	}
+}

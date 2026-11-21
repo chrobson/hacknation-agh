@@ -402,3 +402,40 @@ func TestApplyRunLatencyChange(t *testing.T) {
 		t.Errorf("stored changes %q, want %q", g, want)
 	}
 }
+
+// The AGH quickstart: stopping and restoring one container (8787) on a host
+// that stays up makes the service unstable once it flipped twice.
+func TestApplyRunServiceUnstable(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 21, 14, 0, 0, 0, time.UTC)
+	base := svc(0, "127.0.0.1", 2223, "OpenSSH", "10.3")
+	flap := svc(0, "127.0.0.1", 8787, "nginx", "1.31.9")
+	present := []bool{true, false, true, false, false, true}
+	want := [][]string{
+		{},
+		{`gone 127.0.0.1:8787/tcp "nginx 1.31.9"->""`},
+		{`unstable 127.0.0.1:8787/tcp flips ""->"2"`, `new 127.0.0.1:8787/tcp ""->"nginx 1.31.9"`},
+		{`unstable 127.0.0.1:8787/tcp flips ""->"3"`, `gone 127.0.0.1:8787/tcp "nginx 1.31.9"->""`},
+		{},
+		{`unstable 127.0.0.1:8787/tcp flips ""->"3"`, `new 127.0.0.1:8787/tcp ""->"nginx 1.31.9"`},
+	}
+	for i, p := range present {
+		svcs := []model.ServiceObs{base}
+		if p {
+			svcs = append(svcs, flap)
+		}
+		id := insertRun(t, pool, labRun{hosts: []string{"127.0.0.1"}, services: svcs, chunks: []string{"127.0.0.1/32"}})
+		res, err := ApplyRun(ctx, pool, id, testCfg, t0.Add(time.Duration(i)*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if g := fmtChanges(res.Changes); !reflect.DeepEqual(g, want[i]) && !(len(g) == 0 && len(want[i]) == 0) {
+			t.Errorf("run %d changes:\n got  %q\n want %q", i+1, g, want[i])
+		}
+	}
+	var state string
+	if err := pool.QueryRow(ctx, `SELECT state FROM host_state WHERE ip = '127.0.0.1'`).Scan(&state); err != nil || state != "up" {
+		t.Errorf("host state %q %v, want up", state, err)
+	}
+}
