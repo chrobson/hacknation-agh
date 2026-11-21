@@ -195,7 +195,7 @@ r = json.load(open(sys.argv[1]))
 for m in ("hosts", "services", "detections", "changes"):
     x = r[m]
     print(f"  {m:10s} P={x['precision']} R={x['recall']} (tp={x['tp']} fp={x['fp']} fn={x['fn']})"
-          + (f" missing={x['missing']}" if x["missing"] else "") + (f" unexpected={x['unexpected']}" if x["unexpected"] else ""))
+          + (f" missing={x['missing']}" if x.get("missing") else "") + (f" unexpected={x['unexpected']}" if x.get("unexpected") else ""))
 assert r["pass"], r.get("failures")
 assert r["changes"]["recall"] == 1, r["changes"]
 assert r["detections"]["recall"] == 1, r["detections"]
