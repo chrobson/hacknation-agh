@@ -1,0 +1,28 @@
+# Stand-in for the AGH lab template "custom-network" stack, used only by CI
+# (.github/workflows/e2e-agh.yml). The template itself is not published
+# anywhere public and its licence is unknown, so it is not copied into this
+# repository; this file restates only the public facts of its README table:
+# the same upstream images on the same host ports, with the same service
+# names that scripts/e2e.sh stops and restarts (flask-app on 8787).
+name: asi-ci-agh
+
+services:
+  custom-api:
+    image: kennethreitz/httpbin
+    ports: ["8888:80"]
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ci-only-not-a-secret
+    ports: ["15432:5432"]
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: ["5673:5672", "15673:15672"]
+  gitea:
+    image: gitea/gitea:latest
+    ports: ["3001:3000", "2223:22"]
+  flask-app:
+    image: nginx:alpine
+    ports: ["8787:80"]
