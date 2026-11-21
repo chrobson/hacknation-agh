@@ -92,7 +92,7 @@ Skan /18 przy 1000 pakietów/s trwa około 4 minut. Własną sieć skanuje się 
 | Aktywne hosty, podstawowe usługi | `nmap -sn`, potem `-sS`/`-sT -sV` (top N + drugi przebieg po typowych portach infrastruktury albo `-p-` dla małych celów); dodatkowe rozpoznanie wersji dla nienazwanych portów | **Wyniki**, **Hosty** |
 | HTTP/HTTPS: tytuł, kod, nagłówki, ciasteczka, TLS, przekierowania | sonda GET/HEAD: łańcuch przekierowań, nagłówki, ciasteczka z flagami, certyfikat (wystawca, ważność, self-signed, niezgodność nazwy), favicon mmh3, czas odpowiedzi | **Wyniki** → usługa |
 | Technologie: CMS, framework, serwer, IoT | 41 wbudowanych sygnatur YAML (WordPress z wersją, Joomla, Drupal, Jenkins, Grafana, Tomcat, Gitea, RabbitMQ, Traefik, DVWA, Adminer, kamery i routery IoT…) | **Wyniki**, **Pulpit** („Detekcje według kategorii”) |
-| Staging i panele administracyjne | sygnatury `staging-env` (vhost, nagłówki, tytuł) i `admin-panel`/`login-page` (`/admin`, `/login`, bez prób logowania) | **Pulpit** („Panele administracyjne i środowiska testowe”) |
+| Staging i panele administracyjne | sygnatury `staging-env` (vhost, nagłówki, tytuł) i `admin-panel`/`login-page` (`/admin`, `/login`, bez prób logowania); ogólne panele są pomijane, gdy usługę rozpoznała sygnatura produktu (np. Gitea, Jenkins) | **Pulpit** („Panele administracyjne i środowiska testowe”) |
 | Porównanie przebiegów; nowe, znikające, zmienione | diff po kluczu (IP, port, protokół, vhost): `new`, `gone`, `changed` (produkt, wersja, tytuł, kod, certyfikat, czas odpowiedzi…) | **Zmiany**, **Pulpit** („Ostatnie zmiany”) |
 | Hosty i usługi niestabilne, nieaktywne | jawna, konfigurowalna definicja: `inactive` po 3 kolejnych brakach odpowiedzi, `unstable` po co najmniej 2 zmianach stanu w ostatnich 5 przebiegach (`ASI_INACTIVE_AFTER_MISSES`, `ASI_UNSTABLE_IF_FLIPS`, `ASI_UNSTABLE_WINDOW`) | **Hosty**, **Zmiany** |
 | Własne sygnatury | edytor YAML z walidacją: nagłówek, ciasteczko, hash favicony, regex HTML, ścieżka GET (≤3), wersja, `severity`, `outdated` | **Sygnatury** |
@@ -171,7 +171,7 @@ Testy integracyjne z bazą: `ASI_TEST_DATABASE_URL=postgres://… go test -tags 
 
 Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt przy POST i dla roli Modyfikacja i odczyt przy imporcie, eksport Generic Findings (77 findingów) z walidacją offline i ponownym importem bez fałszywych zmian, szyfrowanie wszystkich 22 tabel, brak próbek w `pg_statistic` i brak jawnego znacznika na dysku.
 
-**Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty (1/0/0), usługi (25/0/0) i zmiany (2/0/0) z precision i recall 1.0; detekcje mają recall 1.0 i precision 0,71 (5/2/0), bo sygnatura strony logowania trafiła dodatkowo w dwie aplikacje spoza wzorca (porty 3001 i 18081). Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
+**Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty (1/0/0), detekcje (5/0/0) i zmiany szablonu z precision i recall 1.0. Usługi: 25/1/0 (precision 0,96), a zmiany 2/1/0, bo w trzecim przebiegu na hoście był otwarty dodatkowy port efemeryczny (54114) aplikacji spoza szablonu. Przed poprawką detekcje miały precision 0,71 (5/2/0): strona logowania na Gitei (3001) i na interfejsie samego skanera (18081). Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
 
 Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`make up-hostgw`, `make up-host`, `make native`) z `make seed-demo` i skanem konfiguracji **Demo**: 2 min 52 s dla `host.docker.internal`, około 4 min dla `localhost` (dwa adresy).
 
@@ -180,11 +180,11 @@ Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`m
 - Skanowane są tylko porty TCP; UDP (np. DNS, SNMP) nie jest skanowany.
 - Chunki mają stały rozmiar /24. Adaptacyjny dobór rozmiaru (`target.Sizer`) jest zaimplementowany i przetestowany, ale nie jest podpięty do runnera.
 - Wszystkie testy wykonano na macOS z OrbStack (kontenery w maszynie wirtualnej z Linuksem), nie na fizycznym hoście z Linuksem. Tryb sieci hosta na Linuksie jest najprostszy, ale nie był uruchomiony na takim hoście.
-- W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe), bo to faktycznie otwarte porty.
+- W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe), bo to faktycznie otwarte porty. Własny interfejs skanera jest rozpoznawany po nagłówku `X-Asi-Instance` i nie dostaje detekcji (strony logowania); inne aplikacje hosta z formularzem logowania (np. lokalny DefectDojo na 8081) są raportowane jak każda inna usługa.
 - Klucz pg_tde leży w lokalnym keyringu w wolumenie Dockera na tym samym hoście; produkcyjnie powinien trafić do KMS (OpenBao/Vault, KMIP). Nazwy tabel i kolumn w katalogu systemowym nie są szyfrowane.
 - Brak pasywnych źródeł danych (CT logs, DNS), oceny „ciekawości” usług i analizy różnic zależnych od pory dnia.
 - Konto użytkownika nie ma zmiany hasła w interfejsie; hasła startowe pochodzą z `.env` przy pierwszym starcie.
-- Rozpoznanie wersji zależy od nmapa `-sV` i sygnatur; usługi bez banera (np. httpbin na 8888) mają pusty produkt, a część sygnatur (strona logowania) trafia też w aplikacje, których wzorzec labu nie przewiduje.
+- Rozpoznanie wersji zależy od nmapa `-sV` i sygnatur; usługi bez banera (np. httpbin na 8888) mają pusty produkt. Ogólna sygnatura strony logowania jest wyciszana tylko wtedy, gdy na usłudze trafiła sygnatura produktu, więc formularz logowania nieznanej aplikacji jest raportowany jako `login-page`.
 
 ## Licencje komponentów
 

@@ -57,6 +57,16 @@
       }
     }
   ],
+  "gitea-login": [
+    {
+      "signature": "gitea",
+      "category": "other",
+      "confidence": 90,
+      "evidence": {
+        "body": "Powered by Gitea"
+      }
+    }
+  ],
   "gitlab": [
     {
       "signature": "gitlab",
@@ -156,6 +166,25 @@
       "confidence": 85,
       "evidence": {
         "service": "Mosquitto"
+      }
+    }
+  ],
+  "nginx-login": [
+    {
+      "signature": "login-page",
+      "category": "admin-panel",
+      "confidence": 50,
+      "evidence": {
+        "body": "<input type=\"password"
+      }
+    },
+    {
+      "signature": "nginx",
+      "category": "server",
+      "confidence": 85,
+      "evidence": {
+        "header:Server": "nginx/1.25.3",
+        "version": "1.25.3"
       }
     }
   ],

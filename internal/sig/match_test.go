@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,6 +118,13 @@ func scenarios() []scenario {
 		}(), obs: model.HTTPObs{}},
 		{name: "iot-camera", svc: svc(8091, ""), obs: httpObs(8091, "Network Video Recorder Login", "", map[string][]string{"Server": {"GoAhead-Webs"}})},
 		{name: "plain-nothing", svc: svc(8092, ""), obs: httpObs(8092, "It works", "<p>static</p>", map[string][]string{"Server": {"Caddy"}})},
+		// Gitea's sign-in form on its home page: the product explains the
+		// password field, so no generic login-page next to it.
+		{name: "gitea-login", svc: svc(3001, ""), obs: httpObs(3001, "Gitea: Git with a cup of tea",
+			`<form><input type="password" name="password"></form><footer>Powered by Gitea</footer>`, nil)},
+		// nginx names only the server: the login form stays reported.
+		{name: "nginx-login", svc: svc(8094, ""), obs: httpObs(8094, "Sign in",
+			`<form><input type="password" name="pw"></form>`, map[string][]string{"Server": {"nginx/1.25.3"}})},
 		{name: "favicon-and-dirlisting", svc: svc(8093, ""), obs: httpObs(8093, "Index of /", "<h1>Index of /</h1>", nil)},
 	}
 }
@@ -301,5 +309,36 @@ func TestHTTPFetcherWithProber(t *testing.T) {
 	}
 	if len(seen) > 1+9 {
 		t.Errorf("too many requests: %d %v", len(seen), seen)
+	}
+}
+
+func TestSuppressGeneric(t *testing.T) {
+	det := func(id, cat string) model.Detection { return model.Detection{SignatureID: id, Category: cat} }
+	ids := func(ds []model.Detection) []string {
+		var out []string
+		for _, d := range ds {
+			out = append(out, d.SignatureID)
+		}
+		return out
+	}
+	cases := []struct {
+		name string
+		in   []model.Detection
+		want []string
+	}{
+		{"product other", []model.Detection{det("gitea", "other"), det("login-page", "admin-panel")}, []string{"gitea"}},
+		{"product cms", []model.Detection{det("login-page", "admin-panel"), det("wordpress", "cms")}, []string{"wordpress"}},
+		{"product panel", []model.Detection{det("jenkins", "admin-panel"), det("admin-panel", "admin-panel"), det("login-page", "admin-panel")}, []string{"jenkins"}},
+		{"iot device", []model.Detection{det("iot-webui", "iot"), det("login-page", "admin-panel")}, []string{"iot-webui"}},
+		{"server only", []model.Detection{det("nginx", "server"), det("login-page", "admin-panel")}, []string{"nginx", "login-page"}},
+		{"framework only", []model.Detection{det("php", "framework"), det("admin-panel", "admin-panel")}, []string{"php", "admin-panel"}},
+		{"tls property", []model.Detection{det("tls-self-signed", "other"), det("login-page", "admin-panel")}, []string{"tls-self-signed", "login-page"}},
+		{"staging", []model.Detection{det("staging-env", "staging"), det("login-page", "admin-panel")}, []string{"staging-env", "login-page"}},
+		{"custom product", []model.Detection{det("my-app", "other"), det("login-page", "admin-panel")}, []string{"my-app"}},
+	}
+	for _, c := range cases {
+		if got := ids(SuppressGeneric(c.in)); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
 	}
 }

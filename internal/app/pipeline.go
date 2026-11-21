@@ -37,6 +37,10 @@ type Pipeline struct {
 	Log      *slog.Logger
 	Workers  int // parallel probes, default 8
 	Now      func() time.Time
+	// SelfID is InstanceID of this installation: services answering with it
+	// in InstanceHeader are the scanner's own UI and get no detections (the
+	// open port itself is still reported).
+	SelfID string
 }
 
 // OnDone is the runner hook: fingerprint, then diff.ApplyRun.
@@ -147,7 +151,9 @@ func (p *Pipeline) service(ctx context.Context, s model.ServiceObs, hostnames []
 		}
 	}
 	var dets []model.Detection
-	if p.Engine != nil {
+	if isSelf(obs, p.SelfID) {
+		p.log().Debug("own web UI, detections skipped", "service", diff.KeyString(s.Key))
+	} else if p.Engine != nil {
 		dets = p.Engine.MatchContext(ctx, s, obs)
 		// Names the address is known by (domain targets) are probed as
 		// virtual hosts too: a staging vhost on a shared IP is otherwise
@@ -162,6 +168,7 @@ func (p *Pipeline) service(ctx context.Context, s model.ServiceObs, hostnames []
 				}
 				dets = mergeDetections(dets, p.Engine.MatchContext(ctx, vs, vo))
 			}
+			dets = sig.SuppressGeneric(dets)
 		}
 	}
 	for i := range dets {

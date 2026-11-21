@@ -99,21 +99,30 @@ func (e *Engine) MatchContext(ctx context.Context, svc model.ServiceObs, obs mod
 }
 
 // GenericPanels are catch-all panel signatures (a password field, /admin).
-// They are dropped when a product-specific panel or device UI on the same
-// service already explains the login form.
+// They are dropped when a product-specific signature on the same service
+// already explains the login form.
 var GenericPanels = map[string]bool{"login-page": true, "admin-panel": true}
 
-// SuppressGeneric removes GenericPanels detections when another admin-panel
-// or iot detection matched the same service.
+// productCategories are the categories of signatures that name the
+// application behind a web UI (a panel, a device, a CMS, other products
+// such as Gitea or GitLab). Servers and frameworks (nginx, PHP) do not: a
+// login form behind nginx is still worth reporting.
+var productCategories = map[string]bool{"admin-panel": true, "iot": true, "cms": true, "other": true}
+
+// nonProduct are signatures in productCategories that describe a property
+// of the service rather than the application (TLS, a directory listing).
+var nonProduct = map[string]bool{"tls-expired": true, "tls-self-signed": true, "directory-listing": true}
+
+// IsProduct reports whether a detection identifies the application behind
+// a service, which makes a generic panel detection on it redundant.
+func IsProduct(d model.Detection) bool {
+	return !GenericPanels[d.SignatureID] && !nonProduct[d.SignatureID] && productCategories[d.Category]
+}
+
+// SuppressGeneric removes GenericPanels detections when a product-specific
+// detection (IsProduct) matched the same service.
 func SuppressGeneric(ds []model.Detection) []model.Detection {
-	specific := false
-	for _, d := range ds {
-		if !GenericPanels[d.SignatureID] && (d.Category == "admin-panel" || d.Category == "iot") {
-			specific = true
-			break
-		}
-	}
-	if !specific {
+	if !slices.ContainsFunc(ds, IsProduct) {
 		return ds
 	}
 	out := ds[:0]

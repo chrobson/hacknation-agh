@@ -75,7 +75,7 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 		}
 		c.Engine.SetSignatures(s)
 	}
-	c.Pipeline = &Pipeline{Pool: d.DB, Prober: c.Prober, Engine: c.Engine, Unstable: cfg.Unstable, Log: d.Log}
+	c.Pipeline = &Pipeline{Pool: d.DB, Prober: c.Prober, Engine: c.Engine, Unstable: cfg.Unstable, Log: d.Log, SelfID: InstanceID(cfg)}
 
 	sc := scan.NewNmap(cfg.NmapPath, c.Allow, cfg.ScanExclude...)
 	c.Runner = runner.New(store.NewScanStore(d.DB), sc, c.Allow, cfg.ScanPrivileged, d.Log)
@@ -155,7 +155,7 @@ func Router(base context.Context, c *Core) (http.Handler, error) {
 	// No middleware.RealIP: the app is reached directly (published on
 	// 127.0.0.1), so X-Forwarded-For would let any client choose the address
 	// written to the audit log and used for login throttling.
-	r.Use(middleware.Recoverer, securityHeaders)
+	r.Use(middleware.Recoverer, securityHeaders, instanceHeader(InstanceID(d.Config)))
 	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler(webassets.Static)))
 	r.Group(func(r chi.Router) {
 		// Session + CSRF (CrossOriginProtection) before any module.
