@@ -1,0 +1,12 @@
+id: nginx
+name: nginx
+category: server
+confidence: 85
+description: Serwer WWW nginx (nagłówek Server lub produkt z nmapa).
+condition: or
+matchers:
+  - type: header
+    name: Server
+    regex: '(?i)nginx(?:/(?P<version>[0-9.]+))?'
+  - type: service
+    product: '(?i)nginx'

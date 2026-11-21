@@ -1,0 +1,11 @@
+id: directory-listing
+name: Listing katalogu
+category: other
+confidence: 80
+description: Włączone listowanie katalogów (strona "Index of /").
+condition: or
+matchers:
+  - type: title
+    regex: '^Index of /'
+  - type: body
+    regex: '<h1>Index of /|<title>Directory listing for /'

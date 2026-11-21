@@ -1,0 +1,1 @@
+{{define "validation"}}{{if .Errors}}<div class="errors"><strong>Błędy walidacji:</strong><ul>{{range .Errors}}<li>{{.}}</li>{{end}}</ul></div>{{else if .Parsed}}<p class="ok">Sygnatura poprawna: <code>{{.Parsed.ID}}</code>, {{len .Parsed.Matchers}} dopasowań.</p>{{end}}{{end}}

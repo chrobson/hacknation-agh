@@ -1,0 +1,13 @@
+id: tomcat
+name: Apache Tomcat
+category: server
+confidence: 85
+description: Kontener serwletów Apache Tomcat (strona domyślna, strona błędu lub produkt z nmapa).
+condition: or
+matchers:
+  - type: title
+    regex: 'Apache Tomcat(?:/(?P<version>[0-9.]+))?'
+  - type: body
+    regex: '<h3>Apache Tomcat(?:/(?P<version>[0-9.]+))?</h3>'
+  - type: service
+    product: 'Apache Tomcat'

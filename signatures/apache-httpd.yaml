@@ -1,0 +1,12 @@
+id: apache-httpd
+name: Apache HTTP Server
+category: server
+confidence: 85
+description: Serwer WWW Apache httpd (nagłówek Server lub produkt z nmapa).
+condition: or
+matchers:
+  - type: header
+    name: Server
+    regex: '^Apache(?:/(?P<version>[0-9.]+))?'
+  - type: service
+    product: 'Apache httpd'

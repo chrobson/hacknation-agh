@@ -1,0 +1,16 @@
+id: admin-panel
+name: Panel administracyjny (/admin)
+category: admin-panel
+confidence: 60
+description: Ogólny panel administracyjny pod /admin (Basic auth albo formularz z hasłem). Tylko GET, bez prób logowania.
+condition: or
+matchers:
+  - type: title
+    regex: '(?i)\b(?:admin(?:istration|istrator)?\s*(?:panel|console|login|dashboard)|panel administracyjny|panel administratora)\b'
+  - type: path
+    path: /admin
+    status: [401]
+  - type: path
+    path: /admin
+    status: [200]
+    regex: '(?i)<input[^>]+type=["'']?password'

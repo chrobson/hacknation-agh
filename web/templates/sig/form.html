@@ -1,0 +1,30 @@
+{{define "title"}}{{.Title}} · Attack Surface Intelligence{{end}}
+{{define "nav"}}<a href="/signatures">Sygnatury</a>{{end}}
+{{define "content"}}
+<section class="page">
+  <header class="page-head">
+    <h1>{{.Title}}</h1>
+    <a href="/signatures">Anuluj</a>
+  </header>
+  <form method="post" action="{{if .IsNew}}/signatures{{else}}/signatures/{{.Sig.ID}}{{end}}" class="sig-form">
+    <label for="yaml">Definicja sygnatury (YAML)</label>
+    <textarea id="yaml" name="yaml" rows="24" spellcheck="false" required
+      hx-post="/signatures/validate" hx-trigger="keyup changed delay:600ms" hx-target="#validation" hx-swap="innerHTML">{{.YAML}}</textarea>
+    <div id="validation" aria-live="polite">{{template "validation" .}}</div>
+    <button type="submit">Zapisz</button>
+  </form>
+  <details class="help">
+    <summary>Dostępne pola</summary>
+    <ul>
+      <li><code>category</code>: {{join .Categories ", "}}</li>
+      <li><code>confidence</code>: 1–100, <code>condition</code>: or | and</li>
+      <li>Typy dopasowań: {{join .Types ", "}}</li>
+      <li><code>header</code>: name, regex · <code>cookie</code>: name lub regex · <code>title</code>/<code>body</code>/<code>hostname</code>: regex</li>
+      <li><code>favicon</code>: hashes (mmh3 jak w Shodan) · <code>status</code>: status [kody]</li>
+      <li><code>path</code>: path, method (GET/HEAD), status, regex, header, header_regex</li>
+      <li><code>tls</code>: expired / self_signed / hostname_mismatch · <code>service</code>: product, banner, ports</li>
+      <li>Grupa nazwana <code>(?P&lt;version&gt;…)</code> w wyrażeniu zapisuje wersję w dowodzie.</li>
+    </ul>
+  </details>
+</section>
+{{end}}

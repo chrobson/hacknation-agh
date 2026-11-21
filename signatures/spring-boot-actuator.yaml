@@ -1,0 +1,17 @@
+id: spring-boot-actuator
+name: Spring Boot Actuator
+category: framework
+confidence: 90
+description: Odsłonięte endpointy Spring Boot Actuator (/actuator, /actuator/health) lub strona Whitelabel Error.
+condition: or
+matchers:
+  - type: path
+    path: /actuator
+    status: [200]
+    regex: '"_links"\s*:'
+  - type: path
+    path: /actuator/health
+    status: [200]
+    regex: '"status"\s*:\s*"(?:UP|DOWN|OUT_OF_SERVICE)"'
+  - type: body
+    regex: 'Whitelabel Error Page'

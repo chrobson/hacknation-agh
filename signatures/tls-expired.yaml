@@ -1,0 +1,8 @@
+id: tls-expired
+name: Certyfikat TLS wygasły
+category: other
+confidence: 95
+description: Data ważności (notAfter) certyfikatu prezentowanego przez usługę minęła.
+matchers:
+  - type: tls
+    expired: true

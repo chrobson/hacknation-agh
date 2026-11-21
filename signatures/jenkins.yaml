@@ -1,0 +1,16 @@
+id: jenkins
+name: Jenkins
+category: admin-panel
+confidence: 90
+description: Serwer CI Jenkins (nagłówki X-Jenkins/X-Hudson, tytuł, zasoby statyczne).
+condition: or
+matchers:
+  - type: header
+    name: X-Jenkins
+    regex: '(?P<version>[0-9][0-9.]*)'
+  - type: header
+    name: X-Hudson
+  - type: title
+    regex: '\[Jenkins\]|^Jenkins$|Sign in \[Jenkins\]'
+  - type: body
+    regex: 'Welcome to Jenkins!|jenkins-head-icon'
