@@ -74,12 +74,10 @@ jobs:
           if-no-files-found: warn
 
   # Fault injection (scripts/e2e-toxi.sh): latency and timeout toxics on the
-  # proxied WordPress must not produce false gone/changed rows. Reported, not
-  # gating, until the gateway-error case is handled (see the step summary).
+  # proxied WordPress must not produce false gone/changed rows.
   toxiproxy-linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    continue-on-error: true
     env:
       E2E_TOXI_MODE: host
     steps:
