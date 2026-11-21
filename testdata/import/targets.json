@@ -1,0 +1,5 @@
+[
+  {"value": "10.20.0.0/24", "tags": ["lab", "web"]},
+  {"value": "10.20.1.10", "tags": ["lab"]},
+  {"value": "scanme.nmap.org", "tags": ["external"]}
+]

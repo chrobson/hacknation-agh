@@ -1,0 +1,17 @@
+{{define "base"}}<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{block "title" .}}Attack Surface Intelligence{{end}}</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Attack Surface Intelligence</a>
+  <nav>{{block "nav" .}}{{end}}</nav>
+</header>
+<main>{{block "content" .}}{{end}}</main>
+</body>
+</html>{{end}}

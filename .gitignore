@@ -5,3 +5,7 @@ tmp/
 
 # Notatki robocze (plany, research, ustalenia, taski): tylko lokalnie, nie trafiają do repo
 notes/
+
+# Encryption keys and keyrings never go to git
+*.keyring
+keys/

@@ -1,0 +1,23 @@
+{
+  "findings": [
+    {
+      "title": "Open service 443/tcp nginx 1.27.4",
+      "severity": "Info",
+      "description": "Service detected by Attack Surface Intelligence.\n\n- Host: 10.20.0.11\n- Port: 443/tcp\n- Product: nginx 1.27.4\n- First seen: 2026-11-21T18:00:00Z",
+      "date": "2026-11-21",
+      "unique_id_from_tool": "asi:svc:10.20.0.11:443/tcp",
+      "endpoints": [{"host": "10.20.0.11", "port": 443, "protocol": "https"}],
+      "tags": ["asi", "service"]
+    },
+    {
+      "title": "Admin panel detected: phpMyAdmin",
+      "severity": "Medium",
+      "description": "Signature `phpmyadmin` matched.\n\n- URL: http://10.20.0.14/\n- Evidence: title contains 'phpMyAdmin'",
+      "date": "2026-11-21",
+      "unique_id_from_tool": "asi:sig:10.20.0.14:80:phpmyadmin",
+      "vuln_id_from_tool": "phpmyadmin",
+      "endpoints": [{"host": "10.20.0.14", "port": 80, "protocol": "http"}],
+      "tags": ["asi", "admin-panel"]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# Attack Surface Intelligence: database (Percona pg_tde) + application.
+# The docker lab lives in lab/compose.yml; compose.lab.yml attaches the app to it.
+name: asi
+
+services:
+  keys-init:
+    image: busybox:1.36
+    command: ["sh", "-c", "chown 26:26 /keys && chmod 700 /keys"]
+    volumes:
+      - pgkeys:/keys
+
+  db:
+    image: percona/percona-distribution-postgresql:18.7.1-1
+    command: ["postgres", "-c", "shared_preload_libraries=pg_tde"]
+    depends_on:
+      keys-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_USER: ${ASI_DB_USER:-asi}
+      POSTGRES_PASSWORD: ${ASI_DB_PASSWORD:?set ASI_DB_PASSWORD in .env}
+      POSTGRES_DB: asi
+    volumes:
+      - pgdata:/data/db
+      - pgkeys:/keys
+      - ./deploy/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ASI_DB_USER:-asi} -d asi"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      ASI_DATABASE_URL: postgres://${ASI_DB_USER:-asi}:${ASI_DB_PASSWORD}@db:5432/asi?sslmode=disable
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata: {}
+  pgkeys: {}

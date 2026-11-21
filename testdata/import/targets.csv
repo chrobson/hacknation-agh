@@ -1,0 +1,4 @@
+value,tags
+10.20.0.0/24,lab;web
+10.20.1.10,lab
+scanme.nmap.org,external
