@@ -4,6 +4,10 @@ category: other
 confidence: 80
 description: Włączone listowanie katalogów (strona "Index of /").
 condition: or
+cwe: [548]
+remediation: 'Wyłącz listowanie katalogów (Options -Indexes w Apache, autoindex off w nginx).'
+references:
+  - https://httpd.apache.org/docs/2.4/mod/mod_autoindex.html
 matchers:
   - type: title
     regex: '^Index of /'

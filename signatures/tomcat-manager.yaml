@@ -4,6 +4,11 @@ category: admin-panel
 confidence: 90
 description: Panel Tomcat Manager pod /manager/html (realm Basic "Tomcat Manager Application" lub strona managera). Bez prób logowania.
 condition: or
+cwe: [1188]
+attack: [T1078, T1190]
+remediation: 'Usuń aplikację manager lub ogranicz ją filtrem RemoteAddrValve do sieci administracyjnej i ustaw silne, unikalne hasła.'
+references:
+  - https://tomcat.apache.org/tomcat-9.0-doc/manager-howto.html
 matchers:
   - type: path
     path: /manager/html

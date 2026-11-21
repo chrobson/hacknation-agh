@@ -5,6 +5,11 @@ confidence: 85
 severity: high
 description: Redis odpowiedział na sondę nmapa (INFO) pełną wersją, czyli bez hasła i bez protected mode. Wniosek wyłącznie z banera; ASI nie wysyła do Redisa żadnych poleceń zapisu.
 condition: and
+cwe: [306]
+attack: [T1190]
+remediation: 'Włącz uwierzytelnianie (requirepass lub ACL) i protected-mode, a port 6379 udostępniaj tylko z sieci aplikacji.'
+references:
+  - https://redis.io/docs/latest/operate/oss_and_stack/management/security/
 matchers:
   - type: service
     product: '(?i)^Redis key-value store (?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)'

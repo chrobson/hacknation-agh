@@ -4,6 +4,9 @@ category: admin-panel
 confidence: 90
 description: Panel Kibana (nagłówki kbn-name/kbn-version, metadane kbn-injected-metadata).
 condition: or
+cwe: [668]
+attack: [T1078]
+remediation: 'Włącz uwierzytelnianie Elastic Security i udostępniaj Kibanę tylko z sieci wewnętrznej.'
 matchers:
   - type: header
     name: Kbn-Version

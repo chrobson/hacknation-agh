@@ -22,6 +22,7 @@ import (
 	"github.com/chrobson/hacknation-agh/internal/httpfp"
 	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/runner"
+	"github.com/chrobson/hacknation-agh/internal/sig"
 	"github.com/chrobson/hacknation-agh/internal/store"
 	"github.com/chrobson/hacknation-agh/internal/web"
 )
@@ -841,6 +842,9 @@ func (p *Pages) service(w http.ResponseWriter, r *http.Request) {
 	if d.Detections, err = store.ListDetections(ctx, p.Deps.DB, id); err != nil {
 		p.fail(w, r, err)
 		return
+	}
+	if len(d.Detections) > 0 {
+		model.AttachMeta(d.Detections, sig.Metas(ctx, p.Deps.DB))
 	}
 	if lt, err := store.GetLegacyTLS(ctx, p.Deps.DB, id); err == nil {
 		d.Legacy = &lt

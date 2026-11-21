@@ -4,6 +4,9 @@ category: admin-panel
 confidence: 50
 description: Formularz logowania na stronie głównej lub pod /login. Wykrywany po polu hasła, bez prób logowania.
 condition: or
+cwe: [668]
+attack: [T1078, T1110]
+remediation: 'Ogranicz dostęp do formularza logowania do potrzebnych sieci, wymuś MFA i limit prób logowania.'
 matchers:
   - type: body
     regex: '(?i)<input[^>]+type=["'']?password'

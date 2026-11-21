@@ -4,6 +4,9 @@ category: staging
 confidence: 70
 description: Nazwa hosta (vhost, SAN certyfikatu, przekierowania) lub tytuł wskazujący na środowisko dev/test/staging.
 condition: or
+cwe: [489]
+attack: [T1190]
+remediation: 'Odetnij środowisko testowe od sieci użytkowników (VPN, allowlista IP) i nie używaj w nim danych produkcyjnych.'
 matchers:
   - type: hostname
     regex: '(?i)(?:^|[.-])(?:staging|stage|stg|dev|devel|develop|test|testing|uat|qa|preprod|sandbox)(?:[0-9]*)(?:[.-]|$)'

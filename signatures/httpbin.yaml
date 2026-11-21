@@ -5,6 +5,8 @@ confidence: 90
 severity: low
 description: Usługa testowa httpbin (odbija nagłówki i adres klienta, ma /redirect-to). Narzędzie deweloperskie, które nie powinno być wystawione. Wersja ze strony głównej.
 condition: or
+cwe: [489]
+remediation: 'Usuń narzędzie testowe httpbin z sieci produkcyjnej lub ogranicz do niego dostęp.'
 matchers:
   - type: body
     regex: '(?s)<pre class="version">\s*(?P<version>[0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*</pre>.*?A simple HTTP Request &(?:amp;)? Response Service'

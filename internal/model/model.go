@@ -113,6 +113,33 @@ type Detection struct {
 	Category    string // cms|framework|server|iot|admin-panel|staging|other
 	Confidence  int    // 0-100
 	Evidence    map[string]string
+	// Meta is the signature's CWE/ATT&CK/remediation metadata. It is not
+	// stored with the detection: readers attach it from the current
+	// signature set (nil when the signature has none or was removed).
+	Meta *SignatureMeta `json:"-"`
+}
+
+// SignatureMeta is the optional classification a signature carries.
+type SignatureMeta struct {
+	CWE         []int    // CWE ids, most specific first
+	Attack      []string // MITRE ATT&CK technique ids (T1190, T1078.001)
+	Remediation string   // one-sentence fix, shown in the UI and exported as mitigation
+	References  []string // http(s) URLs
+}
+
+// Empty reports whether m carries no metadata.
+func (m *SignatureMeta) Empty() bool {
+	return m == nil || (len(m.CWE) == 0 && len(m.Attack) == 0 && m.Remediation == "" && len(m.References) == 0)
+}
+
+// AttachMeta sets Detection.Meta from a map keyed by signature id.
+func AttachMeta(dets []Detection, metas map[string]SignatureMeta) {
+	for i := range dets {
+		if m, ok := metas[dets[i].SignatureID]; ok && !m.Empty() {
+			m := m
+			dets[i].Meta = &m
+		}
+	}
 }
 
 // ChangeKind classifies a difference between two runs.
@@ -185,4 +212,7 @@ type Finding struct {
 	VulnIDFromTool   string // signature id, empty for plain services
 	Endpoints        []AssetKey
 	Tags             []string
+	CWE              int    // first CWE of the signature, 0 = none
+	Mitigation       string // signature remediation
+	References       string // newline-separated URLs
 }

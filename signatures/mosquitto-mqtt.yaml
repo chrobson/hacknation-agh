@@ -4,6 +4,9 @@ category: iot
 confidence: 85
 description: Broker MQTT (Eclipse Mosquitto) wykryty po produkcie/banerze z nmapa lub porcie 1883/8883.
 condition: or
+cwe: [668]
+attack: [T1190]
+remediation: 'Wyłącz anonimowy dostęp (allow_anonymous false), wymuś TLS i ogranicz port MQTT do sieci urządzeń.'
 matchers:
   - type: service
     product: '(?i)mosquitto|mqtt'

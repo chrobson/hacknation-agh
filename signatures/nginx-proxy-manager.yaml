@@ -4,6 +4,9 @@ category: admin-panel
 confidence: 90
 description: Panel administracyjny Nginx Proxy Manager (zwykle port 81). Wersja główna z API /api/ (odpowiedź statusu bez uwierzytelnienia, odpytywana tylko po rozpoznaniu panelu). Domyślne konto instalacji jest publicznie znane, więc panel nie powinien być dostępny z sieci.
 condition: or
+cwe: [668]
+attack: [T1078]
+remediation: 'Ogranicz panel Nginx Proxy Managera do sieci administracyjnej i zmień domyślne dane logowania.'
 matchers:
   - type: title
     regex: '^Nginx Proxy Manager$'

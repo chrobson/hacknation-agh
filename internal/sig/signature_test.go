@@ -107,3 +107,77 @@ func TestParseRejectsHugeDocument(t *testing.T) {
 		t.Fatal("accepted empty document")
 	}
 }
+
+const metaBase = `id: meta-test
+name: Meta test
+category: server
+confidence: 80
+matchers:
+  - type: title
+    regex: 'x'
+`
+
+func TestSignatureMetaValid(t *testing.T) {
+	s, err := Parse([]byte(metaBase + `cwe: [306, 668]
+attack: [T1190, T1078.001]
+remediation: 'Włącz   uwierzytelnianie.'
+references:
+  - https://redis.io/docs/latest/operate/oss_and_stack/management/security/
+  - http://example.test/a
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := s.Meta()
+	if m == nil || m.CWE[0] != 306 || m.Attack[1] != "T1078.001" || m.Remediation != "Włącz uwierzytelnianie." || len(m.References) != 2 {
+		t.Fatalf("meta = %+v", m)
+	}
+	// Without the optional fields the signature loads unchanged and has no meta.
+	plain, err := Parse([]byte(metaBase))
+	if err != nil || plain.Meta() != nil {
+		t.Fatalf("plain signature: %v, meta %+v", err, plain.Meta())
+	}
+}
+
+func TestSignatureMetaInvalid(t *testing.T) {
+	cases := map[string]string{
+		"attack: [T190]":                      "MITRE ATT&CK technique id",
+		"attack: [t1190]":                     "MITRE ATT&CK technique id",
+		"attack: [T1190.1]":                   "MITRE ATT&CK technique id",
+		"references: [ftp://x.test/a]":        "http:// or https:// URL",
+		"references: ['javascript:alert(1)']": "http:// or https:// URL",
+		"references: [/relative]":             "http:// or https:// URL",
+		"cwe: [0]":                            "CWE number",
+		"cwe: [CWE-306]":                      "yaml",
+		"mitigation: x":                       "yaml", // unknown key stays rejected
+	}
+	for extra, want := range cases {
+		_, err := Parse([]byte(metaBase + extra + "\n"))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to mention %q", extra, err, want)
+		}
+	}
+}
+
+func TestBuiltinMetaCoverage(t *testing.T) {
+	sigs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	with := 0
+	for _, s := range sigs {
+		if m := s.Meta(); m != nil && len(m.CWE) > 0 && m.Remediation != "" {
+			with++
+		}
+	}
+	if with*10 < len(sigs)*8 {
+		t.Errorf("only %d of %d built-in signatures have cwe and remediation", with, len(sigs))
+	}
+	for _, id := range []string{"redis-noauth", "traefik-dashboard"} {
+		for _, s := range sigs {
+			if s.ID == id && (len(s.CWE) == 0 || s.CWE[0] != 306) {
+				t.Errorf("%s: cwe = %v, want 306 first", id, s.CWE)
+			}
+		}
+	}
+}

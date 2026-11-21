@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/store"
 )
 
@@ -86,4 +87,42 @@ func LoadEnabled(ctx context.Context, q store.FPQuerier) ([]*Signature, error) {
 		out = append(out, s)
 	}
 	return out, errors.Join(errs...)
+}
+
+// Metas returns the classification (CWE, ATT&CK, remediation, references)
+// of every signature in the database, enabled or not, keyed by id, so a
+// detection from an older run still gets it after its signature was
+// disabled. Built-in signatures come from the embedded copy; custom rows
+// that no longer parse are skipped.
+func Metas(ctx context.Context, q store.FPQuerier) map[string]model.SignatureMeta {
+	out := map[string]model.SignatureMeta{}
+	if builtin, err := Builtin(); err == nil {
+		for _, s := range builtin {
+			if m := s.Meta(); m != nil {
+				out[s.ID] = *m
+			}
+		}
+	}
+	if q == nil {
+		return out
+	}
+	rows, err := store.ListSignatures(ctx, q)
+	if err != nil {
+		return out
+	}
+	for _, r := range rows {
+		if r.Builtin {
+			continue // the embedded copy is current even before SyncBuiltin ran
+		}
+		s, err := Parse([]byte(r.YAML))
+		if err != nil {
+			continue
+		}
+		if m := s.Meta(); m != nil {
+			out[s.ID] = *m
+		} else {
+			delete(out, s.ID)
+		}
+	}
+	return out
 }

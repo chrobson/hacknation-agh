@@ -4,6 +4,8 @@ category: admin-panel
 confidence: 90
 description: Publicznie dostępna strona statystyk HAProxy (/haproxy?stats), ujawnia backendy i ich stan.
 condition: or
+cwe: [200]
+remediation: 'Zabezpiecz stronę statystyk HAProxy hasłem (stats auth) i udostępniaj ją tylko z sieci administracyjnej.'
 matchers:
   - type: title
     regex: '(?i)Statistics Report for HAProxy'

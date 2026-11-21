@@ -4,6 +4,8 @@ category: framework
 confidence: 80
 description: Interpreter PHP ujawniony w nagłówku X-Powered-By lub ciasteczku PHPSESSID.
 condition: or
+cwe: [497]
+remediation: 'Wyłącz expose_php w php.ini i utrzymuj PHP we wspieranej wersji.'
 matchers:
   - type: header
     name: X-Powered-By

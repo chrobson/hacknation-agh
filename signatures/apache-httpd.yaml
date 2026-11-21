@@ -4,6 +4,8 @@ category: server
 confidence: 85
 description: Serwer WWW Apache httpd (nagłówek Server lub produkt z nmapa).
 condition: or
+cwe: [497]
+remediation: 'Ukryj wersję serwera (ServerTokens Prod, ServerSignature Off) i utrzymuj Apache we wspieranej wersji.'
 matchers:
   - type: header
     name: Server

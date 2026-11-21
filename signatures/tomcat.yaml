@@ -4,6 +4,8 @@ category: server
 confidence: 85
 description: Kontener serwletów Apache Tomcat (strona domyślna, strona błędu lub produkt z nmapa).
 condition: or
+cwe: [497]
+remediation: 'Ukryj wersję Tomcata na stronach błędów (ErrorReportValve showServerInfo=false) i utrzymuj go we wspieranej wersji.'
 matchers:
   - type: title
     regex: 'Apache Tomcat(?:/(?P<version>[0-9.]+))?'

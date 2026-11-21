@@ -16,6 +16,7 @@ import (
 
 	"github.com/chrobson/hacknation-agh/internal/dojo"
 	"github.com/chrobson/hacknation-agh/internal/model"
+	"github.com/chrobson/hacknation-agh/internal/sig"
 	"github.com/chrobson/hacknation-agh/internal/store"
 )
 
@@ -53,7 +54,16 @@ func LoadSnapshot(ctx context.Context, db store.DojoDB, runID int64) (Snapshot, 
 	if err != nil {
 		return Snapshot{}, err
 	}
+	AttachMeta(svcs, sig.Metas(ctx, db))
 	return Snapshot{RunID: run.ID, RunKind: run.Kind, Date: run.Date(), Services: svcs, Annotations: anns}, nil
+}
+
+// AttachMeta gives every detection the CWE/ATT&CK/remediation metadata of
+// its signature.
+func AttachMeta(svcs []dojo.Service, metas map[string]model.SignatureMeta) {
+	for i := range svcs {
+		model.AttachMeta(svcs[i].Detections, metas)
+	}
 }
 
 // Findings builds the DefectDojo findings of the snapshot.

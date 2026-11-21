@@ -31,6 +31,9 @@ type wireFinding struct {
 	Title            string         `json:"title"`
 	Severity         string         `json:"severity"`
 	Description      string         `json:"description"`
+	CWE              int            `json:"cwe,omitempty"`
+	Mitigation       string         `json:"mitigation,omitempty"`
+	References       string         `json:"references,omitempty"`
 	Date             string         `json:"date,omitempty"`
 	UniqueIDFromTool string         `json:"unique_id_from_tool,omitempty"`
 	VulnIDFromTool   string         `json:"vuln_id_from_tool,omitempty"`
@@ -64,6 +67,9 @@ func (JSONCodec) Marshal(fs []model.Finding) ([]byte, error) {
 			Title:            strings.TrimSpace(f.Title),
 			Severity:         string(normalizeSeverity(string(f.Severity))),
 			Description:      f.Description,
+			CWE:              f.CWE,
+			Mitigation:       f.Mitigation,
+			References:       f.References,
 			UniqueIDFromTool: f.UniqueIDFromTool,
 			VulnIDFromTool:   f.VulnIDFromTool,
 		}
@@ -105,6 +111,9 @@ type lenientFinding struct {
 	Title            string            `json:"title"`
 	Severity         string            `json:"severity"`
 	Description      string            `json:"description"`
+	CWE              json.RawMessage   `json:"cwe"`
+	Mitigation       string            `json:"mitigation"`
+	References       string            `json:"references"`
 	Date             string            `json:"date"`
 	UniqueIDFromTool string            `json:"unique_id_from_tool"`
 	VulnIDFromTool   string            `json:"vuln_id_from_tool"`
@@ -138,6 +147,9 @@ func (JSONCodec) Unmarshal(b []byte) ([]model.Finding, error) {
 			UniqueIDFromTool: lf.UniqueIDFromTool,
 			VulnIDFromTool:   lf.VulnIDFromTool,
 			Tags:             lf.Tags,
+			CWE:              lenientCWE(lf.CWE),
+			Mitigation:       lf.Mitigation,
+			References:       lf.References,
 		}
 		if lf.Date != "" {
 			d, err := parseDate(lf.Date)
@@ -156,6 +168,18 @@ func (JSONCodec) Unmarshal(b []byte) ([]model.Finding, error) {
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// lenientCWE reads a cwe given as a number, a numeric string or "CWE-306";
+// anything else is 0.
+func lenientCWE(raw json.RawMessage) int {
+	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	s = strings.TrimPrefix(strings.ToUpper(s), "CWE-")
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // endpointFromKey converts an asset key to a DefectDojo endpoint. The

@@ -4,6 +4,9 @@ category: iot
 confidence: 60
 description: Wbudowany interfejs WWW routera, kamery lub rejestratora (typowe serwery embedded, realm Basic, tytuły).
 condition: or
+cwe: [1188]
+attack: [T1078, T1190]
+remediation: 'Zmień domyślne hasła urządzenia, zaktualizuj firmware i przenieś panel do wydzielonej sieci zarządzania.'
 matchers:
   - type: header
     name: Server

@@ -7,6 +7,9 @@ condition: or
 outdated:
   below: "6.0"
   severity: high
+cwe: [1104]
+attack: [T1190]
+remediation: 'Zaktualizuj WordPressa, motywy i wtyczki do wspieranych wersji i włącz automatyczne aktualizacje bezpieczeństwa.'
 matchers:
   - type: body
     regex: '<meta name="generator" content="WordPress ?(?P<version>[0-9.]*)'

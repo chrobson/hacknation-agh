@@ -39,10 +39,10 @@
   <table>
     <thead><tr><th>Sygnatura</th><th>Kategoria</th><th>Poziom</th><th class="num">Pewność</th><th>Dowody</th></tr></thead>
     <tbody>{{range .Detections}}
-      <tr><td><a href="/signatures/{{.SignatureID}}">{{.Name}}</a></td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td>
+      <tr><td><a href="/signatures/{{.SignatureID}}">{{.Name}}</a>{{with .Meta}}<br>{{range .CWE}}<a class="tag" href="https://cwe.mitre.org/data/definitions/{{.}}.html" target="_blank" rel="noopener noreferrer" title="Common Weakness Enumeration">CWE-{{.}}</a> {{end}}{{range .Attack}}<a class="tag" href="https://attack.mitre.org/techniques/{{.}}/" target="_blank" rel="noopener noreferrer" title="MITRE ATT&amp;CK">{{.}}</a> {{end}}{{end}}</td><td><span class="badge cat-{{.Category}}">{{catLabel .Category}}</span></td>
           <td>{{with index .Evidence "severity"}}<span class="badge sev sev-{{.}}">{{.}}</span>{{else}}<span class="muted">domyślny</span>{{end}}{{with index .Evidence "outdated"}} <span class="bad">nieaktualna wersja</span>{{end}}</td>
           <td class="num">{{.Confidence}}%</td>
-          <td>{{range $k, $v := .Evidence}}<code>{{$k}}</code>: {{$v}}<br>{{end}}</td></tr>
+          <td>{{range $k, $v := .Evidence}}<code>{{$k}}</code>: {{$v}}<br>{{end}}{{with .Meta}}{{with .Remediation}}<p class="hint"><strong>Zalecenie:</strong> {{.}}</p>{{end}}{{end}}</td></tr>
     {{end}}</tbody>
   </table>
   {{else}}<p class="muted">Brak detekcji.</p>{{end}}

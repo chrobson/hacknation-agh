@@ -3,6 +3,8 @@ name: Certyfikat TLS wygasły
 category: other
 confidence: 95
 description: Data ważności (notAfter) certyfikatu prezentowanego przez usługę minęła.
+cwe: [298]
+remediation: 'Odnów certyfikat i wdroż automatyczne odnawianie (np. ACME) z alertem przed datą wygaśnięcia.'
 matchers:
   - type: tls
     expired: true

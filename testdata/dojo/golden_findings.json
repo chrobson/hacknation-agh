@@ -23,6 +23,9 @@
       "title": "Admin panel detected: phpMyAdmin",
       "severity": "Medium",
       "description": "Signature `phpmyadmin` matched.\n\n- Host: 10.20.0.14\n- Port: 80/tcp\n- Category: admin-panel\n- Confidence: 100%\n- URL: http://10.20.0.14/\n- HTTP status: 200\n- Page title: phpMyAdmin\n\nEvidence:\n\n- title: phpMyAdmin",
+      "cwe": 668,
+      "mitigation": "Ogranicz phpMyAdmina do sieci administracyjnej.",
+      "references": "https://docs.phpmyadmin.net/en/latest/setup.html#securing-your-phpmyadmin-installation\nhttps://cwe.mitre.org/data/definitions/668.html\nhttps://attack.mitre.org/techniques/T1078/\nhttps://attack.mitre.org/techniques/T1190/",
       "date": "2026-11-21",
       "unique_id_from_tool": "asi:sig:10.20.0.14:80:phpmyadmin",
       "vuln_id_from_tool": "phpmyadmin",
@@ -35,7 +38,9 @@
       ],
       "tags": [
         "admin-panel",
-        "asi"
+        "asi",
+        "attack-t1078",
+        "attack-t1190"
       ]
     },
     {

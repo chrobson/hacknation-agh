@@ -18,6 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/chrobson/hacknation-agh/internal/dojo"
+	"github.com/chrobson/hacknation-agh/internal/export"
+	"github.com/chrobson/hacknation-agh/internal/sig"
 	"github.com/chrobson/hacknation-agh/internal/store"
 )
 
@@ -114,6 +116,7 @@ func generate(dbURL string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	export.AttachMeta(svcs, sig.Metas(ctx, pool))
 	fmt.Printf("generate: run #%d, %d services\n", run.ID, len(svcs))
 	return dojo.NewCodec().Marshal(dojo.BuildFindings(run.Date(), svcs, anns))
 }
