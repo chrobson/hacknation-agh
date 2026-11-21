@@ -1,0 +1,38 @@
+{{define "title"}}Adnotacja {{keyStr .Key}}{{end}}
+{{define "content"}}
+<h1>Adnotacja: <code>{{keyStr .Key}}</code></h1>
+{{template "annotation_form" .}}
+{{end}}
+
+{{define "annotation_form"}}<div class="annotation-form" id="{{keyID .Key}}">
+<form method="post" action="/annotations" hx-post="/annotations" hx-target="closest .annotation-form" hx-swap="outerHTML">
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  <input type="hidden" name="ip" value="{{.Key.IP}}">
+  <input type="hidden" name="port" value="{{.Key.Port}}">
+  <input type="hidden" name="proto" value="{{.Key.Proto}}">
+  <input type="hidden" name="vhost" value="{{.Key.VHost}}">
+  <input type="hidden" name="return" value="{{.Return}}">
+  <label>Komentarz<br><textarea name="comment" rows="3" maxlength="4000">{{.Ann.Comment}}</textarea></label>
+  <label>Tagi (oddzielone przecinkami) <input name="tags" value="{{join .Ann.Tags ", "}}"></label>
+  <label>Ważność
+    <select name="severity">
+      <option value="">(nie ustawiono)</option>
+      {{range .Severities}}<option value="{{.}}"{{if eq (print .) $.Ann.Severity}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label><input type="checkbox" name="false_positive" value="1"{{if .Ann.FalsePositive}} checked{{end}}> Fałszywy alarm</label>
+  <button type="submit">Zapisz</button>
+  <a href="{{.Return}}">Anuluj</a>
+</form>
+{{if .Exists}}
+<form method="post" action="/annotations/delete" hx-post="/annotations/delete" hx-target="closest .annotation-form" hx-swap="outerHTML"
+      hx-confirm="Usunąć adnotację?">
+  <input type="hidden" name="ip" value="{{.Key.IP}}">
+  <input type="hidden" name="port" value="{{.Key.Port}}">
+  <input type="hidden" name="proto" value="{{.Key.Proto}}">
+  <input type="hidden" name="vhost" value="{{.Key.VHost}}">
+  <input type="hidden" name="return" value="{{.Return}}">
+  <button type="submit" class="danger">Usuń adnotację</button>
+</form>
+{{end}}
+</div>{{end}}

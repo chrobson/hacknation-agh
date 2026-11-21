@@ -1,0 +1,49 @@
+{{define "title"}}Zmiany w przebiegu #{{.Run.RunID}}{{end}}
+{{define "content"}}
+<p><a href="/changes">&larr; Wszystkie przebiegi</a></p>
+<h1>Zmiany w przebiegu #{{.Run.RunID}}</h1>
+<p>
+  {{if not .Run.Applied}}Ten przebieg nie został jeszcze porównany z poprzednim.
+  {{else if .Run.PrevRunID}}Porównanie z przebiegiem <a href="/changes/{{.Run.PrevRunID}}">#{{.Run.PrevRunID}}</a>.
+  {{else}}Przebieg bazowy: brak wcześniejszego przebiegu do porównania.{{end}}
+  Łącznie zmian: <strong>{{.Total}}</strong>.
+</p>
+
+{{if .Groups}}
+<nav class="toc">
+  {{range .Groups}}<a href="#k-{{.Kind}}">{{kindLabel .Kind}} ({{len .Rows}})</a> {{end}}
+</nav>
+{{range .Groups}}
+<section id="k-{{.Kind}}">
+  <h2>{{kindLabel .Kind}} <span class="count">({{len .Rows}})</span></h2>
+  <table class="grid">
+    <thead><tr>
+      <th>Zasób</th>
+      {{if eq .Kind "changed"}}<th>Pole</th><th>Było</th><th>Jest</th>
+      {{else if eq .Kind "gone"}}<th>Usługa</th>
+      {{else if eq .Kind "new"}}<th>Usługa</th>
+      {{else if eq .Kind "unstable"}}<th>Zmiany stanu w oknie</th>
+      {{end}}
+      <th>Adnotacja</th>
+    </tr></thead>
+    <tbody>
+    {{$kind := .Kind}}
+    {{range .Rows}}
+    <tr>
+      <td><code>{{keyStr .Key}}</code></td>
+      {{if eq $kind "changed"}}<td>{{fieldLabel .Field}}</td><td><code>{{.Old}}</code></td><td><code>{{.New}}</code></td>
+      {{else if eq $kind "gone"}}<td>{{.Old}}</td>
+      {{else if eq $kind "new"}}<td>{{.New}}</td>
+      {{else if eq $kind "unstable"}}<td class="num">{{.New}}</td>
+      {{end}}
+      <td>{{template "annotation_cell" (cell .Key .Ann $.CanEdit $.Return)}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+{{else}}
+<p>Brak zmian w tym przebiegu.</p>
+{{end}}
+{{end}}
