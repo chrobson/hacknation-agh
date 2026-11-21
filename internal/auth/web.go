@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -145,6 +146,16 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	pw := r.PostFormValue("password")
 	next := safeNext(r.PostFormValue("next"))
 
+	keys := throttleKeys(login, clientIP(r))
+	if blocked, wait := loginThrottle.blocked(keys...); blocked {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		renderStatus(w, http.StatusTooManyRequests, "login.html", pageData{
+			Next: next, Login: login,
+			Error: fmt.Sprintf("Zbyt wiele nieudanych prób logowania. Spróbuj ponownie za %d min.", int(wait.Minutes())+1),
+		})
+		return
+	}
+
 	au, err := store.UserByLogin(ctx, h.d.DB, login)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		h.fail(w, r, err)
@@ -157,6 +168,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 		CheckPassword(string(dummyHash), pw) // equalize timing
 	}
 	if !ok {
+		loginThrottle.fail(keys...)
 		logged := login
 		if len(logged) > 64 {
 			logged = strings.ToValidUTF8(logged[:64], "")
@@ -167,6 +179,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	loginThrottle.reset(keys[0])
 	tok := newToken()
 	exp := time.Now().Add(SessionTTL)
 	if err := store.CreateSession(ctx, h.d.DB, hashToken(tok), au.ID, exp); err != nil {

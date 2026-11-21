@@ -18,8 +18,11 @@
     <div>
       <label for="f-top">Liczba najpopularniejszych portów TCP (faza 2)</label>
       <input id="f-top" name="top_ports" type="number" min="1" max="65535" value="{{.Config.TopPorts}}">
-      <label for="f-rate">Maksymalne tempo całego skanu (pakiety/s, 0 = bez limitu)</label>
-      <input id="f-rate" name="max_rate" type="number" min="0" max="100000" value="{{.Config.MaxRate}}">
+      <label for="f-ports">Porty TCP (lista, np. 22,80,443,8000-8100; puste = najpopularniejsze)</label>
+      <input id="f-ports" name="ports" type="text" maxlength="2000" value="{{.Config.Ports}}"{{with .AllowedPorts}} placeholder="dozwolone: {{.}}"{{end}}>
+      <label class="check"><input type="checkbox" name="extra_ports" value="1"{{if .Config.ExtraPorts}} checked{{end}}> dodatkowy przebieg po typowych portach infrastruktury spoza top 1000 (bez własnej listy portów)</label>
+      <label for="f-rate">Maksymalne tempo całego skanu (pakiety/s, 1–{{.MaxRate}})</label>
+      <input id="f-rate" name="max_rate" type="number" min="1" max="{{.MaxRate}}" required value="{{.Config.MaxRate}}">
       <label for="f-workers">Liczba równoległych wątków (tempo dzielone po równo)</label>
       <input id="f-workers" name="workers" type="number" min="1" max="64" value="{{.Config.Workers}}">
     </div>

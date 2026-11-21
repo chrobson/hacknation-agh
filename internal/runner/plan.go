@@ -32,8 +32,8 @@ type Plan struct {
 // Domains are resolved with resolve (nil = domains skipped). Every resulting
 // prefix is checked against the allowlist; disallowed ones are skipped.
 //
-// TODO: switch to the shared chunker from internal/target once it lands on
-// main; this local splitter keeps the same semantics (dedupe + /24 split).
+// The chunk size is fixed (default /24) because chunks are stored when the
+// run is created and resumption works per chunk; see docs/ARCHITECTURE.md.
 func BuildPlan(ctx context.Context, targets []model.Target, allow target.Allowlist, resolve Resolver, chunkBits4 int) Plan {
 	if chunkBits4 <= 0 || chunkBits4 > 32 {
 		chunkBits4 = DefaultChunkBits4

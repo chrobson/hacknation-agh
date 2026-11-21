@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -342,8 +343,34 @@ func checkPath(p string) string {
 		return "path must not contain .. or encoded traversal"
 	case strings.Contains(p, "://"):
 		return "path must not contain a URL"
+	case credentialQuery(p):
+		return "path query must not carry credentials (no login attempts)"
 	}
 	return ""
+}
+
+// credentialParams are query parameter names that would turn a GET probe
+// into a login or token attempt.
+var credentialParams = []string{"pass", "pwd", "user", "login", "token", "secret", "auth", "key", "session", "cred"}
+
+func credentialQuery(p string) bool {
+	_, q, ok := strings.Cut(p, "?")
+	if !ok {
+		return false
+	}
+	vals, err := url.ParseQuery(q)
+	if err != nil {
+		return true
+	}
+	for name := range vals {
+		n := strings.ToLower(name)
+		for _, c := range credentialParams {
+			if strings.Contains(n, c) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func contains(list []string, s string) bool {

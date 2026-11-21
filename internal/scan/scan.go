@@ -17,6 +17,9 @@ type Opts struct {
 	// (nmap cannot combine --top-ports with an explicit -p list): services
 	// commonly exposed outside the top 1000 (MQTT, Redis, Memcached, NATS...).
 	ExtraPorts []int
+	// Ports, when set, is the explicit TCP port list of phase 2: it replaces
+	// --top-ports and disables the ExtraPorts pass.
+	Ports []int
 }
 
 // DefaultExtraPorts are TCP ports outside nmap's top 1000 that commonly host

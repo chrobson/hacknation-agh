@@ -50,9 +50,18 @@ func TestImportExportDB(t *testing.T) {
 	}
 
 	genRun := importFile(ctx, t, tx, "../../testdata/dojo/golden_findings.json")
-	run, err := store.ExportLatestRun(ctx, tx)
+	run, err := store.ExportRunByID(ctx, tx, genRun)
 	if err != nil || run.ID != genRun || run.Kind != "import" {
-		t.Fatalf("latest run %+v %v", run, err)
+		t.Fatalf("import run %+v %v", run, err)
+	}
+	// The latest run is a scan whenever one exists; imports only otherwise.
+	var scans int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM scan_runs WHERE kind='scan' AND status='done'`).Scan(&scans); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := store.ExportLatestRun(ctx, tx)
+	if err != nil || (scans > 0) != (latest.Kind == "scan") || (scans == 0 && latest.ID != genRun) {
+		t.Fatalf("latest run %+v %v (scans: %d)", latest, err, scans)
 	}
 	svcs, err = store.ExportServices(ctx, tx, genRun)
 	if err != nil {
@@ -69,7 +78,7 @@ func TestImportExportDB(t *testing.T) {
 		VALUES ('10.20.0.14', 80, 'tcp', '', true)`); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := LoadSnapshot(ctx, tx, 0)
+	snap, err := LoadSnapshot(ctx, tx, genRun)
 	if err != nil || snap.RunID != genRun || len(snap.Annotations) != 1 {
 		t.Fatalf("snapshot %+v %v", snap, err)
 	}

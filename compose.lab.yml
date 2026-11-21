@@ -15,6 +15,11 @@ services:
     # Lab CoreDNS serves lab.local (staging.lab.local etc.); container names
     # such as "db" are still resolved by the docker embedded DNS.
     dns: [10.20.48.90]
+    # The lab DNS answers only lab.local, so give the local DefectDojo
+    # (make dojo-up, ASI_DOJO_URL=http://host.docker.internal:8081) a static
+    # entry; for a remote instance put its IP address in ASI_DOJO_URL.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       default: {}
       lab:

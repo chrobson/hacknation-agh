@@ -25,6 +25,7 @@ type RunRow struct {
 	ChunksFail  int
 	HostsUp     int
 	Services    int
+	Stopped     bool // stopped by a user; the scheduler leaves it alone
 	Active      bool // executing in this process
 }
 
@@ -55,12 +56,15 @@ const runCols = `r.id, r.config_id, COALESCE(c.name, ''), r.kind, r.status, r.st
 	(SELECT count(*) FROM scan_chunks k WHERE k.run_id = r.id AND k.status = 'done'),
 	(SELECT count(*) FROM scan_chunks k WHERE k.run_id = r.id AND k.status = 'failed'),
 	(SELECT count(*) FROM host_obs h WHERE h.run_id = r.id AND h.up),
-	(SELECT count(*) FROM services s WHERE s.run_id = r.id)`
+	(SELECT count(*) FROM services s WHERE s.run_id = r.id), r.stopped`
+
+// Open reports whether the run can still continue (queued or paused).
+func (r RunRow) Open() bool { return r.Status == "queued" || r.Status == "paused" }
 
 func scanRun(row pgx.Row) (RunRow, error) {
 	var r RunRow
 	err := row.Scan(&r.ID, &r.ConfigID, &r.ConfigName, &r.Kind, &r.Status, &r.StartedAt, &r.FinishedAt, &r.DurationMS,
-		&r.ChunksTotal, &r.ChunksDone, &r.ChunksFail, &r.HostsUp, &r.Services)
+		&r.ChunksTotal, &r.ChunksDone, &r.ChunksFail, &r.HostsUp, &r.Services, &r.Stopped)
 	return r, err
 }
 
@@ -89,10 +93,14 @@ func GetRun(ctx context.Context, db *pgxpool.Pool, id int64) (RunRow, error) {
 		WHERE r.id = $1`, id))
 }
 
-// LatestDoneRun returns the id of the newest finished run (0 if none).
+// LatestDoneRun returns the id of the newest finished scan run, or of the
+// newest finished import when no scan has finished yet (0 if none). An
+// import holds only the hosts in its file, so it is never preferred over a
+// full scan for the dashboard and result defaults.
 func LatestDoneRun(ctx context.Context, db *pgxpool.Pool) (int64, error) {
 	var id int64
-	err := db.QueryRow(ctx, `SELECT id FROM scan_runs WHERE status='done' ORDER BY id DESC LIMIT 1`).Scan(&id)
+	err := db.QueryRow(ctx, `SELECT id FROM scan_runs WHERE status='done'
+		ORDER BY (kind = 'scan') DESC, id DESC LIMIT 1`).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}

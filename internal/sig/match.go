@@ -94,6 +94,33 @@ func (e *Engine) MatchContext(ctx context.Context, svc model.ServiceObs, obs mod
 			})
 		}
 	}
+	return SuppressGeneric(out)
+}
+
+// GenericPanels are catch-all panel signatures (a password field, /admin).
+// They are dropped when a product-specific panel or device UI on the same
+// service already explains the login form.
+var GenericPanels = map[string]bool{"login-page": true, "admin-panel": true}
+
+// SuppressGeneric removes GenericPanels detections when another admin-panel
+// or iot detection matched the same service.
+func SuppressGeneric(ds []model.Detection) []model.Detection {
+	specific := false
+	for _, d := range ds {
+		if !GenericPanels[d.SignatureID] && (d.Category == "admin-panel" || d.Category == "iot") {
+			specific = true
+			break
+		}
+	}
+	if !specific {
+		return ds
+	}
+	out := ds[:0]
+	for _, d := range ds {
+		if !GenericPanels[d.SignatureID] {
+			out = append(out, d)
+		}
+	}
 	return out
 }
 

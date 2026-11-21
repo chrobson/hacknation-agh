@@ -161,14 +161,6 @@
   ],
   "phpmyadmin": [
     {
-      "signature": "login-page",
-      "category": "admin-panel",
-      "confidence": 50,
-      "evidence": {
-        "body": "<input type=\"password"
-      }
-    },
-    {
       "signature": "phpmyadmin",
       "category": "admin-panel",
       "confidence": 95,

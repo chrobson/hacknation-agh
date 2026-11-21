@@ -43,7 +43,7 @@ type PermInfo struct {
 var AllPerms = []PermInfo{
 	{PermTargetsRead, "Odczyt celów"},
 	{PermTargetsWrite, "Dodawanie, usuwanie i edycja celów"},
-	{PermScansRun, "Uruchamianie skanów"},
+	{PermScansRun, "Uruchamianie skanów i import wyników"},
 	{PermResultsRead, "Odczyt wyników"},
 	{PermResultsEdit, "Edycja wyników (adnotacje, false positive)"},
 	{PermSignaturesWrite, "Zarządzanie sygnaturami"},

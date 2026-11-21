@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -142,7 +143,9 @@ func FromFindings(fs []model.Finding) Observations {
 			addHost(k)
 			if sigID == "" {
 				product, version := descriptionField(f.Description, "Product"), descriptionField(f.Description, "Version")
-				if product == "" {
+				// Our own export writes the product in the description; its
+				// title ("Open service 22/tcp") is not a product name.
+				if product == "" && !strings.HasPrefix(f.UniqueIDFromTool, "asi:") {
 					product = strings.TrimSpace(f.Title)
 				}
 				addSvc(model.ServiceObs{Key: k, Product: product, Version: version})
@@ -191,8 +194,48 @@ func descriptionField(desc, label string) string {
 	return ""
 }
 
+// AllowHost limits imported hosts to the allowed networks. The integrator
+// sets it from ASI_ALLOWED_CIDRS; nil accepts every address.
+var AllowHost func(netip.Addr) bool
+
+// FilterAllowed drops hosts, services and detections outside allow and
+// reports each dropped host in obs.Errors.
+func FilterAllowed(obs Observations, allow func(netip.Addr) bool) Observations {
+	if allow == nil {
+		return obs
+	}
+	out := Observations{Errors: obs.Errors}
+	dropped := map[netip.Addr]bool{}
+	ok := func(ip netip.Addr) bool {
+		if allow(ip) {
+			return true
+		}
+		if !dropped[ip] {
+			dropped[ip] = true
+			out.Errors = append(out.Errors, fmt.Sprintf("host %s: outside allowed networks, skipped", ip))
+		}
+		return false
+	}
+	for _, h := range obs.Hosts {
+		if ok(h.IP) {
+			out.Hosts = append(out.Hosts, h)
+		}
+	}
+	for _, s := range obs.Services {
+		if ok(s.Key.IP) {
+			out.Services = append(out.Services, s)
+		}
+	}
+	for _, d := range obs.Detections {
+		if ok(d.Key.IP) {
+			out.Detections = append(out.Detections, d)
+		}
+	}
+	return out
+}
+
 // Import parses a file and stores it as one scan_run of kind "import" in a
-// single transaction.
+// single transaction. Hosts outside AllowHost are dropped.
 func Import(ctx context.Context, pool *pgxpool.Pool, b []byte) (Report, error) {
 	if len(b) > MaxImportSize {
 		return Report{}, fmt.Errorf("import file larger than %d bytes", MaxImportSize)
@@ -201,6 +244,7 @@ func Import(ctx context.Context, pool *pgxpool.Pool, b []byte) (Report, error) {
 	if err != nil {
 		return Report{Format: format}, err
 	}
+	obs = FilterAllowed(obs, AllowHost)
 	rep := Report{Format: format, Errors: obs.Errors}
 	if len(obs.Hosts) == 0 {
 		return rep, errors.New("nothing to import")

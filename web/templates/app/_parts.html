@@ -1,5 +1,5 @@
 {{define "nav"}}{{end}}
 {{define "flash"}}{{if .Message}}<p class="flash ok" role="status">{{.Message}}</p>{{end}}{{if .Error}}<p class="flash err" role="alert">{{.Error}}</p>{{end}}{{end}}
-{{define "runstatus"}}<span class="badge run-{{.Status}}">{{runLabel .Status}}</span>{{end}}
+{{define "runstatus"}}{{if and .Stopped .Open}}<span class="badge run-paused">zatrzymany</span>{{else}}<span class="badge run-{{.Status}}">{{runLabel .Status}}</span>{{end}}{{end}}
 {{define "progress"}}{{if .ChunksTotal}}<progress max="{{.ChunksTotal}}" value="{{.ChunksDone}}"></progress> {{.ChunksDone}}/{{.ChunksTotal}} chunków{{if .ChunksFail}}, <span class="bad">{{.ChunksFail}} błędnych</span>{{end}}{{else}}–{{end}}{{end}}
 {{define "dets"}}{{range .}}<span class="badge cat-{{.Category}}" title="{{catLabel .Category}}, pewność {{.Confidence}}%">{{.Name}}</span> {{end}}{{end}}

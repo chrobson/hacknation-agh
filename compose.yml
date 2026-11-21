@@ -19,6 +19,7 @@ services:
       POSTGRES_USER: ${ASI_DB_USER:-asi}
       POSTGRES_PASSWORD: ${ASI_DB_PASSWORD:?set ASI_DB_PASSWORD in .env}
       POSTGRES_DB: asi
+      TZ: ${ASI_TZ:-Europe/Warsaw}
     volumes:
       - pgdata:/data/db
       - pgkeys:/keys
@@ -37,6 +38,8 @@ services:
     env_file: .env
     environment:
       ASI_DATABASE_URL: postgres://${ASI_DB_USER:-asi}:${ASI_DB_PASSWORD}@db:5432/asi?sslmode=disable
+      # Scan windows and UI times use the container's local time.
+      TZ: ${ASI_TZ:-Europe/Warsaw}
     ports:
       - "127.0.0.1:${ASI_PORT:-8080}:8080"
     healthcheck:

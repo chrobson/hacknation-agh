@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chrobson/hacknation-agh/internal/config"
 	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/scan"
 	"github.com/chrobson/hacknation-agh/internal/store"
@@ -56,6 +57,12 @@ type Runner struct {
 	MaxAttempts int
 	ChunkBits4  int
 	ExtraPorts  []int // second phase-2 pass (scan.Opts.ExtraPorts)
+	// MaxRate caps a config's packets/s (all workers); a config with 0 or
+	// more is scanned at MaxRate. 0 = no cap.
+	MaxRate int
+	// AllowedPorts, when set, restricts phase 2 to these TCP ports: a config
+	// without its own list scans exactly these, a config list is intersected.
+	AllowedPorts []int
 	// OnDone, if set, is called after a run is marked done (all chunks
 	// finished), e.g. HTTP fingerprinting then diff.ApplyRun. Its error is
 	// logged and returned by Execute.
@@ -186,10 +193,45 @@ func (r *Runner) StartConfig(base context.Context, configID int64) (int64, error
 	return runID, nil
 }
 
+// EffectivePorts returns the explicit phase 2 port list of a config: its own
+// list (spec) intersected with allowed, or allowed when spec is empty. nil
+// means --top-ports. A spec with no port left after the intersection is an
+// error, so a scan never silently widens to the top ports.
+func EffectivePorts(spec string, allowed []int) ([]int, error) {
+	own, err := config.ParsePorts(spec)
+	if err != nil {
+		return nil, err
+	}
+	if len(allowed) == 0 {
+		return own, nil
+	}
+	if len(own) == 0 {
+		return allowed, nil
+	}
+	ok := make(map[int]bool, len(allowed))
+	for _, p := range allowed {
+		ok[p] = true
+	}
+	var out []int
+	for _, p := range own {
+		if ok[p] {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("żaden z portów %q nie jest dozwolony (ASI_SCAN_PORTS)", spec)
+	}
+	return out, nil
+}
+
 // Execute runs the pending chunks of a run with cfg.Workers workers until no
 // chunk is left or ctx ends (window end / shutdown). The run is then marked
 // done, failed (every chunk failed) or paused (chunks left).
 func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig) error {
+	ports, err := EffectivePorts(cfg.Ports, r.AllowedPorts)
+	if err != nil {
+		return fmt.Errorf("konfiguracja %q: %w", cfg.Name, err)
+	}
 	started := r.now()
 	if err := r.Store.StartRun(ctx, runID); err != nil {
 		return err
@@ -199,7 +241,16 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 		r.log().Warn("cannot load targets for hostnames", "run", runID, "err", err)
 	}
 	k := max(cfg.Workers, 1)
-	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(cfg.MaxRate, k), Privileged: r.Privileged, ExtraPorts: r.ExtraPorts}
+	rate := cfg.MaxRate
+	if r.MaxRate > 0 && (rate <= 0 || rate > r.MaxRate) {
+		rate = r.MaxRate
+	}
+	extra := r.ExtraPorts
+	if !cfg.ExtraPorts {
+		extra = nil
+	}
+	opts := scan.Opts{TopPorts: cfg.TopPorts, MaxRate: PerWorkerRate(rate, k), Privileged: r.Privileged,
+		ExtraPorts: extra, Ports: ports}
 	r.log().Info("scan run started", "run", runID, "config", cfg.Name, "workers", k, "rate_per_worker", opts.MaxRate)
 
 	var wg sync.WaitGroup

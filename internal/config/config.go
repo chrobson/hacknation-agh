@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,8 @@ type Config struct {
 	DojoUser       string         // ASI_DOJO_USER, used to obtain a token when DojoToken is empty
 	DojoPassword   string         // ASI_DOJO_PASSWORD
 	ScanExclude    []netip.Addr   // ASI_SCAN_EXCLUDE, comma separated addresses never scanned
+	MaxRate        int            // ASI_MAX_RATE, upper bound of a scan config's packets/s, default 5000
+	ScanPorts      []int          // ASI_SCAN_PORTS, allowed TCP ports ("22,80,8000-8100"); empty = no restriction
 	Unstable       UnstableConfig
 	TickEvery      time.Duration // ASI_TICK_EVERY, scheduler tick, default 1m
 }
@@ -43,6 +46,65 @@ const DefaultAllowedCIDRs = "10.20.0.0/18,192.0.2.0/24"
 // target: the network address, the docker bridge gateway and the scanner.
 const DefaultScanExclude = "10.20.0.0,10.20.0.1,10.20.63.250"
 
+// DefaultMaxRate caps the packets/s of one scan run (all workers together).
+const DefaultMaxRate = 5000
+
+// ParsePorts parses a TCP port list such as "22,80,443,8000-8100" into a
+// sorted list without duplicates. An empty string gives nil.
+func ParsePorts(s string) ([]int, error) {
+	seen := map[int]bool{}
+	var out []int
+	add := func(p int) {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		lo, hi, isRange := strings.Cut(part, "-")
+		a, err := strconv.Atoi(strings.TrimSpace(lo))
+		if err != nil || a < 1 || a > 65535 {
+			return nil, fmt.Errorf("invalid port %q", part)
+		}
+		b := a
+		if isRange {
+			if b, err = strconv.Atoi(strings.TrimSpace(hi)); err != nil || b < a || b > 65535 {
+				return nil, fmt.Errorf("invalid port range %q", part)
+			}
+		}
+		for p := a; p <= b; p++ {
+			add(p)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// FormatPorts is the inverse of ParsePorts for a sorted list: "22,80,8000-8100".
+func FormatPorts(ps []int) string {
+	var b strings.Builder
+	for i := 0; i < len(ps); {
+		j := i
+		for j+1 < len(ps) && ps[j+1] == ps[j]+1 {
+			j++
+		}
+		if b.Len() > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.Itoa(ps[i]))
+		if j > i {
+			b.WriteByte('-')
+			b.WriteString(strconv.Itoa(ps[j]))
+		}
+		i = j + 1
+	}
+	return b.String()
+}
+
 // Load reads the configuration from the environment.
 func Load() (Config, error) {
 	c := Config{
@@ -60,6 +122,15 @@ func Load() (Config, error) {
 	}
 	if c.ScanExclude, err = ParseAddrs(env("ASI_SCAN_EXCLUDE", DefaultScanExclude)); err != nil {
 		return c, fmt.Errorf("ASI_SCAN_EXCLUDE: %w", err)
+	}
+	if c.MaxRate, err = envInt("ASI_MAX_RATE", DefaultMaxRate); err != nil {
+		return c, err
+	}
+	if c.MaxRate < 1 {
+		return c, fmt.Errorf("ASI_MAX_RATE must be at least 1")
+	}
+	if c.ScanPorts, err = ParsePorts(os.Getenv("ASI_SCAN_PORTS")); err != nil {
+		return c, fmt.Errorf("ASI_SCAN_PORTS: %w", err)
 	}
 	if c.ScanPrivileged, err = envBool("ASI_SCAN_PRIVILEGED", false); err != nil {
 		return c, err

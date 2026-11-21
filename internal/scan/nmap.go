@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrobson/hacknation-agh/internal/config"
 	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/target"
 )
@@ -103,7 +104,7 @@ func (n *Nmap) Services(ctx context.Context, hosts []netip.Addr, o Opts) ([]mode
 				seen[s.Key] = true
 			}
 		}
-		if len(o.ExtraPorts) > 0 {
+		if len(o.ExtraPorts) > 0 && len(o.Ports) == 0 {
 			res, err := n.run(ctx, ExtraServiceArgs(group, o))
 			if err != nil {
 				return nil, err
@@ -162,11 +163,13 @@ func ServiceArgs(hosts []netip.Addr, o Opts) []string {
 	if top <= 0 {
 		top = DefaultTopPorts
 	}
-	args := []string{
-		scanType, "-Pn", "-n",
-		"--top-ports", strconv.Itoa(top),
-		"-sV", "--version-light", "--open",
+	ports := []string{"--top-ports", strconv.Itoa(top)}
+	if len(o.Ports) > 0 {
+		ports = []string{"-p", config.FormatPorts(o.Ports)}
 	}
+	args := []string{scanType, "-Pn", "-n"}
+	args = append(args, ports...)
+	args = append(args, "-sV", "--version-light", "--open")
 	args = appendRate(args, o.MaxRate)
 	if len(hosts) > 0 && hosts[0].Unmap().Is6() {
 		args = append(args, "-6")

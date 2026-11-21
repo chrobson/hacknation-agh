@@ -265,6 +265,7 @@ func importCmd(ctx context.Context, d web.Deps, args []string) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if export.DetectFormat(b) != export.FormatUnknown {
+		export.AllowHost = target.NewAllowlist(d.Config.AllowedCIDRs).AllowsAddr
 		rep, err := export.Import(ctx, d.DB, b)
 		if err != nil {
 			return err

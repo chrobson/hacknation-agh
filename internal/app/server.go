@@ -73,8 +73,13 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	c.Runner = runner.New(store.NewScanStore(d.DB), sc, c.Allow, cfg.ScanPrivileged, d.Log)
 	c.Runner.OnDone = c.Pipeline.OnDone
 	c.Runner.ExtraPorts = scan.DefaultExtraPorts
+	c.Runner.MaxRate = cfg.MaxRate
+	c.Runner.AllowedPorts = cfg.ScanPorts
 
-	// Imports (nmap XML, Generic Findings) are compared like scan runs.
+	// Imports (nmap XML, Generic Findings) are compared like scan runs,
+	// limited to the hosts in the file, and never store hosts outside the
+	// allowed networks.
+	export.AllowHost = c.Allow.AllowsAddr
 	export.AfterImport = func(ctx context.Context, _ *pgxpool.Pool, runID int64) error {
 		return c.Pipeline.ApplyDiff(ctx, runID)
 	}
@@ -113,6 +118,10 @@ func SetModuleHooks(tmpl fs.FS) {
 	}
 	sig.TemplateFS = tmpl
 	sig.Authorize = func(p string) func(http.Handler) http.Handler { return auth.Require(p) }
+	sig.Can = func(r *http.Request, p string) bool {
+		u := auth.UserFrom(r.Context())
+		return u != nil && u.Can(p)
+	}
 	export.BaseTemplates = tmpl
 	export.RequirePerm = func(p string) func(http.Handler) http.Handler { return auth.Require(p) }
 	export.CurrentUserID = func(r *http.Request) *int64 {
@@ -134,14 +143,22 @@ func Router(base context.Context, c *Core) (http.Handler, error) {
 		return nil, err
 	}
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP, middleware.Recoverer, securityHeaders)
+	// No middleware.RealIP: the app is reached directly (published on
+	// 127.0.0.1), so X-Forwarded-For would let any client choose the address
+	// written to the audit log and used for login throttling.
+	r.Use(middleware.Recoverer, securityHeaders)
 	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler(webassets.Static)))
 	r.Group(func(r chi.Router) {
 		// Session + CSRF (CrossOriginProtection) before any module.
 		r.Use(auth.Middleware(d))
 		auth.Mount(r, d)
 		pages.Mount(r)
-		target.Mount(r, d)
+		r.Group(func(r chi.Router) {
+			// Anonymous visitors are sent to /login like on every other page
+			// (the targets module itself only knows allowed / 403).
+			r.Use(auth.RequireAuth)
+			target.Mount(r, d)
+		})
 		sig.Mount(r, d)
 		diff.Mount(r, d)
 		export.Mount(r, d)

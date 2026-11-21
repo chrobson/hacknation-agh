@@ -194,3 +194,11 @@ func TestExtraServiceArgs(t *testing.T) {
 		t.Fatalf("args = %q, want %q", got, want)
 	}
 }
+
+func TestServiceArgsExplicitPorts(t *testing.T) {
+	hosts := []netip.Addr{netip.MustParseAddr("10.20.0.10")}
+	got := strings.Join(ServiceArgs(hosts, Opts{TopPorts: 100, MaxRate: 50, Ports: []int{22, 80, 81, 82, 443}}), " ")
+	if want := "-sT -Pn -n -p 22,80-82,443 -sV --version-light --open --max-rate 50 -oX - 10.20.0.10"; got != want {
+		t.Errorf("got %s\nwant %s", got, want)
+	}
+}

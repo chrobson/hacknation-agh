@@ -45,6 +45,8 @@ type ScanConfig struct {
 	WindowEnd    *time.Duration
 	EveryMinutes *int
 	Enabled      bool
+	Ports        string // explicit TCP port list ("22,80,8000-8100"); "" = TopPorts
+	ExtraPorts   bool   // second pass over scan.DefaultExtraPorts (only without Ports)
 }
 
 // HasWindow reports whether the config restricts scanning to a time window.
@@ -98,13 +100,13 @@ func (s *ScanStore) ResetRunning(ctx context.Context) (int64, error) {
 	return tag.RowsAffected(), tx.Commit(ctx)
 }
 
-const configCols = `id, name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled`
+const configCols = `id, name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports`
 
 func scanConfig(row pgx.Row) (ScanConfig, error) {
 	var c ScanConfig
 	var ws, we pgtype.Time
 	var every pgtype.Int4
-	if err := row.Scan(&c.ID, &c.Name, &c.TargetIDs, &c.TopPorts, &c.MaxRate, &c.Workers, &ws, &we, &every, &c.Enabled); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.TargetIDs, &c.TopPorts, &c.MaxRate, &c.Workers, &ws, &we, &every, &c.Enabled, &c.Ports, &c.ExtraPorts); err != nil {
 		return c, err
 	}
 	if ws.Valid {
@@ -216,7 +218,7 @@ func (s *ScanStore) LastRun(ctx context.Context, configID int64) (*RunInfo, erro
 func (s *ScanStore) OpenRuns(ctx context.Context) ([]RunInfo, error) {
 	rows, err := s.DB.Query(ctx,
 		`SELECT id, config_id, status, started_at FROM scan_runs
-		 WHERE kind='scan' AND status IN ('queued','running','paused') ORDER BY id`)
+		 WHERE kind='scan' AND status IN ('queued','running','paused') AND NOT stopped ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}

@@ -24,8 +24,12 @@ import (
 	exporttpl "github.com/chrobson/hacknation-agh/web/templates/export"
 )
 
-// PermExport is the RBAC permission required for every route of this module.
+// PermExport is the RBAC permission required for the export routes.
 const PermExport = "export"
+
+// PermImport guards the import routes: an import writes scan results, so it
+// needs the scan permission, not the read-only export one.
+const PermImport = "scans.run"
 
 // RequirePerm wraps handlers with an RBAC check. The integrator sets it to
 // the auth module's middleware. The default fails closed (403) so the
@@ -76,7 +80,7 @@ type handler struct {
 //	GET  /import                  upload form
 //	POST /import                  import nmap XML or Generic Findings JSON
 //
-// All routes require the "export" permission.
+// Export routes require the "export" permission, import routes "scans.run".
 func Mount(r chi.Router, d web.Deps) {
 	h, err := newHandler(d)
 	if err != nil {
@@ -89,6 +93,9 @@ func Mount(r chi.Router, d web.Deps) {
 		r.Get("/export/services.json", h.json)
 		r.Get("/export/defectdojo.json", h.dojo)
 		r.Post("/export/defectdojo/push", h.push)
+	})
+	r.Group(func(r chi.Router) {
+		r.Use(RequirePerm(PermImport))
 		r.Get("/import", h.importForm)
 		r.Post("/import", h.importUpload)
 	})

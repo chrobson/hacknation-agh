@@ -39,11 +39,14 @@ func parseAddr(s string) (netip.Addr, error) {
 
 // ---------------------------------------------------------------- runs ---
 
-// DiffPrevRunID returns the newest finished run older than runID, or 0.
+// DiffPrevRunID returns the newest finished scan run (kind 'scan') older
+// than runID, or 0. Import runs are never used as a baseline: they carry a
+// partial view (only the hosts in the file, fewer fields) and would make the
+// next scan report everything else as changed or gone.
 func DiffPrevRunID(ctx context.Context, db DiffDB, runID int64) (int64, error) {
 	var id *int64
 	err := db.QueryRow(ctx,
-		`SELECT max(id) FROM scan_runs WHERE id < $1 AND status = 'done'`, runID).Scan(&id)
+		`SELECT max(id) FROM scan_runs WHERE id < $1 AND status = 'done' AND kind = 'scan'`, runID).Scan(&id)
 	if err != nil || id == nil {
 		return 0, err
 	}
@@ -76,16 +79,32 @@ func DiffRunServices(ctx context.Context, db DiffDB, runID int64) ([]model.Servi
 	return DiffRunServicesInScope(ctx, db, runID, runID)
 }
 
+// DiffRunIsImport reports whether runID is an import run.
+func DiffRunIsImport(ctx context.Context, db DiffDB, runID int64) (bool, error) {
+	var ok bool
+	err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM scan_runs WHERE id = $1 AND kind = 'import')`, runID).Scan(&ok)
+	return ok, err
+}
+
+// inScope is a SQL predicate: address column col lies in the scope of the run
+// given by parameter p. An import run covers exactly the hosts present in the
+// file (its host_obs and services); a scan run covers its chunk CIDRs; a scan
+// run without chunks covers everything.
+func inScope(col, p string) string {
+	return `(CASE WHEN EXISTS (SELECT 1 FROM scan_runs r WHERE r.id = ` + p + ` AND r.kind = 'import') THEN
+		   EXISTS (SELECT 1 FROM host_obs h WHERE h.run_id = ` + p + ` AND h.ip = ` + col + `)
+		   OR EXISTS (SELECT 1 FROM services s2 WHERE s2.run_id = ` + p + ` AND s2.ip = ` + col + `)
+		 ELSE NOT EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = ` + p + `)
+		   OR EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = ` + p + ` AND ` + col + ` <<= c.cidr) END)`
+}
+
 // DiffRunServicesInScope loads the services of runID restricted to the scope
-// (chunk CIDRs) of scopeRunID; no restriction when scopeRunID has no chunks.
-// Used to load the previous run's services without reporting hosts outside
-// the current run's targets as gone.
+// of scopeRunID (see inScope). Used to load the previous run's services
+// without reporting hosts outside the current run's targets as gone.
 func DiffRunServicesInScope(ctx context.Context, db DiffDB, runID, scopeRunID int64) ([]model.ServiceObs, error) {
 	rows, err := db.Query(ctx, `
 		SELECT id, run_id, host(ip), port, proto, vhost, product, version, extrainfo, cpe, banner
-		FROM services s WHERE run_id = $1
-		  AND (NOT EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = $2)
-		       OR EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = $2 AND s.ip <<= c.cidr))`,
+		FROM services s WHERE run_id = $1 AND `+inScope("s.ip", "$2"),
 		runID, scopeRunID)
 	if err != nil {
 		return nil, err
@@ -159,13 +178,13 @@ func scanHostStates(rows pgx.Rows) ([]model.HostState, error) {
 }
 
 // DiffHostStatesInScope returns (and, in a transaction, locks) the states of
-// known hosts covered by runID: hosts inside one of the run's chunk CIDRs, or
-// every known host when the run has no chunks (e.g. an import).
+// known hosts covered by runID (see inScope): hosts inside one of a scan
+// run's chunk CIDRs, only the hosts present in an import, or every known host
+// for a scan run without chunks.
 func DiffHostStatesInScope(ctx context.Context, db DiffDB, runID int64) ([]model.HostState, error) {
 	rows, err := db.Query(ctx, `
 		SELECT `+hostStateCols+` FROM host_state hs
-		WHERE NOT EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = $1)
-		   OR EXISTS (SELECT 1 FROM scan_chunks c WHERE c.run_id = $1 AND hs.ip <<= c.cidr)
+		WHERE `+inScope("hs.ip", "$1")+`
 		ORDER BY hs.ip
 		FOR UPDATE OF hs`, runID)
 	if err != nil {

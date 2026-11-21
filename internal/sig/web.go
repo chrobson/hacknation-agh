@@ -32,6 +32,10 @@ var Authorize func(perm string) func(http.Handler) http.Handler
 // sig/*.html). nil = os.DirFS(ASI_TEMPLATES_DIR or "web/templates").
 var TemplateFS fs.FS
 
+// Can reports whether the request's user holds perm; used only to hide
+// buttons the user may not use. The integrator sets it; nil shows them.
+var Can func(r *http.Request, perm string) bool
+
 // OnChange is called after a signature was created, edited, toggled or
 // deleted, so the running engine can reload (optional).
 var OnChange func(ctx context.Context)
@@ -175,9 +179,11 @@ type pageData struct {
 	Message    string
 	Categories []string
 	Types      []string
+	CanWrite   bool // the viewer has signatures.write: show write buttons
 }
 
-func (h *handler) render(w http.ResponseWriter, status int, page, name string, data pageData) {
+func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, page, name string, data pageData) {
+	data.CanWrite = Can == nil || Can(r, PermWrite)
 	if h.tmplErr != nil {
 		http.Error(w, "Błąd szablonów: "+h.tmplErr.Error(), http.StatusInternalServerError)
 		return
@@ -237,7 +243,7 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Rows = append(data.Rows, lr)
 	}
-	h.render(w, http.StatusOK, "list.html", "base", data)
+	h.render(w, r, http.StatusOK, "list.html", "base", data)
 }
 
 func (h *handler) view(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +260,7 @@ func (h *handler) view(w http.ResponseWriter, r *http.Request) {
 	if perr != nil {
 		data.Errors = problems(perr)
 	}
-	h.render(w, http.StatusOK, "view.html", "base", data)
+	h.render(w, r, http.StatusOK, "view.html", "base", data)
 }
 
 const newTemplate = `id: my-signature
@@ -273,8 +279,8 @@ matchers:
     regex: '"version"'
 `
 
-func (h *handler) newForm(w http.ResponseWriter, _ *http.Request) {
-	h.render(w, http.StatusOK, "form.html", "base", pageData{Title: "Nowa sygnatura", IsNew: true, YAML: newTemplate})
+func (h *handler) newForm(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, http.StatusOK, "form.html", "base", pageData{Title: "Nowa sygnatura", IsNew: true, YAML: newTemplate})
 }
 
 func (h *handler) editForm(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +296,7 @@ func (h *handler) editForm(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, ErrBuiltin)
 		return
 	}
-	h.render(w, http.StatusOK, "form.html", "base", pageData{Title: "Edycja: " + row.ID, Sig: row, YAML: row.YAML})
+	h.render(w, r, http.StatusOK, "form.html", "base", pageData{Title: "Edycja: " + row.ID, Sig: row, YAML: row.YAML})
 }
 
 // flashMessages maps the fixed ?msg= codes to text, so the query string can
@@ -336,7 +342,7 @@ func (h *handler) validate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data.Parsed = s
 	}
-	h.render(w, http.StatusOK, "validate.html", "validation", data)
+	h.render(w, r, http.StatusOK, "validate.html", "validation", data)
 }
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +362,7 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 		err = h.st.Create(r.Context(), s)
 	}
 	if err != nil {
-		h.render(w, http.StatusUnprocessableEntity, "form.html", "base",
+		h.render(w, r, http.StatusUnprocessableEntity, "form.html", "base",
 			pageData{Title: "Nowa sygnatura", IsNew: true, YAML: src, Errors: problems(err)})
 		return
 	}
@@ -391,7 +397,7 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 			h.fail(w, err)
 			return
 		}
-		h.render(w, http.StatusUnprocessableEntity, "form.html", "base",
+		h.render(w, r, http.StatusUnprocessableEntity, "form.html", "base",
 			pageData{Title: "Edycja: " + id, Sig: row, YAML: src, Errors: problems(err)})
 		return
 	}

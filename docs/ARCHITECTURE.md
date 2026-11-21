@@ -49,17 +49,18 @@ Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 
 
 ## Przepływ skanu
 
-1. Cele (IP, CIDR, domeny) → allowlista → podział na chunki (domyślnie /24) w kolejce `scan_chunks`.
-2. K wątków pobiera chunki (`FOR UPDATE SKIP LOCKED`), każdy z tempem `max_rate/K`: `nmap -sn` (ARP/ICMP/TCP ping), potem `-sS|-sT --top-ports N -sV --version-light` na aktywnych hostach i drugi przebieg po portach spoza top 1000 (MQTT, Redis, Memcached, NATS, MongoDB…). Koniec okna przerywa chunk i zwraca go do kolejki.
+1. Cele (IP, CIDR, domeny) → allowlista → podział na chunki /24 w kolejce `scan_chunks`. Rozmiar jest stały, bo chunki powstają w bazie przy tworzeniu przebiegu (wznawianie po oknie i po restarcie liczy się w chunkach). /24 daje 64 chunki na /18, więc K wątków równoważy obciążenie, a pojedynczy chunk z `-sV` mieści się w kilkudziesięciu sekundach przy 250 pps na wątek. Adaptacyjny `target.Sizer`/`Cutter` (EWMA czasu na adres) jest gotowy, ale nie jest jeszcze podpięty do runnera.
+2. K wątków pobiera chunki (`FOR UPDATE SKIP LOCKED`), każdy z tempem `max_rate/K` (`max_rate` od 1 do `ASI_MAX_RATE`, domyślnie 5000; nie ma trybu bez limitu): `nmap -sn` (ARP/ICMP/TCP ping), potem `-sS|-sT --top-ports N -sV --version-light` na aktywnych hostach i drugi przebieg po portach spoza top 1000 (MQTT, Redis, Memcached, NATS, MongoDB…). Konfiguracja może podać jawną listę portów (`-p`, wtedy bez drugiego przebiegu), a `ASI_SCAN_PORTS` ogranicza wszystkie skany do dozwolonych portów. Koniec okna przerywa chunk i zwraca go do kolejki. „Zatrzymaj” oznacza przebieg jako zatrzymany: harmonogram go nie wznawia, dopóki użytkownik nie kliknie „Wznów”.
 3. Po zakończeniu przebiegu: sondowanie HTTP/HTTPS każdej usługi webowej (także jako vhost dla domen z listy celów), dopasowanie sygnatur, zapis `http_obs`/`detections`, porównanie z poprzednim przebiegiem (`changes`, `host_state`).
-4. Import XML nmapa lub Generic Findings tworzy przebieg `import`, który też jest porównywany.
+4. Import XML nmapa lub Generic Findings (uprawnienie `scans.run`) tworzy przebieg `import`. Hosty spoza `ASI_ALLOWED_CIDRS` są odrzucane. Import porównuje się z ostatnim skanem tylko na hostach z pliku, pomijając pola, których format nie niesie. Import nigdy nie jest punktem odniesienia dla kolejnego skanu ani domyślnym przebiegiem pulpitu, wyników i eksportu.
 
 ## Bezpieczeństwo
 
 - **Allowlista sieci** (`ASI_ALLOWED_CIDRS`) sprawdzana przy imporcie celów i ponownie tuż przed uruchomieniem skanera.
 - **Szyfrowanie w spoczynku**: pg_tde (AES-256) dla tabel, indeksów, TOAST, sekwencji i WAL.
   - Logowanie treści zapytań wyłączone, `work_mem` ograniczający pliki tymczasowe.
-  - `SET STATISTICS 0` dla kolumn z adresami i banerami, bo `pg_statistic` nie jest szyfrowane.
+  - `SET STATISTICS 0` dla wszystkich kolumn tekstowych, JSON i adresowych (migracja 0700 czyści też zebrane już próbki), bo `pg_statistic` nie jest szyfrowane.
   - Ograniczenia: nazwy tabel w katalogu systemowym, lokalny keyring. W produkcji klucz w OpenBao/KMIP.
 - **Sekrety aplikacji** (token DefectDojo): AES-GCM kluczem `ASI_SECRET_KEY`.
 - **DefectDojo push** domyślnie wyłączony.
+- **Logowanie**: po 5 nieudanych próbach w ciągu 15 min dla loginu lub adresu kolejne próby dostają 429. Adres klienta to adres połączenia (bez `X-Forwarded-For`).

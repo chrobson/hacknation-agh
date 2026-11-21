@@ -122,12 +122,53 @@ put "$OUT/findings.json" /tmp/findings.json
 asi import /tmp/findings.json | tee "$OUT/reimport.json"
 grep -q '"format": "generic"' "$OUT/reimport.json" || grep -q '"run_id"' "$OUT/reimport.json" || fail "re-import"
 
+log "import semantics: a re-import of our own export reports no false changes"
+RID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$OUT/reimport.json")
+psql_db "SELECT kind, count(*) FROM changes WHERE run_id=$RID GROUP BY kind ORDER BY kind"
+bad=$(psql_db "SELECT count(*) FROM changes WHERE run_id=$RID AND kind IN ('gone','changed','host_down')")
+[ "$bad" = 0 ] || fail "re-import produced $bad gone/changed/host_down rows"
+
+log "import semantics: a 1-host import leaves other hosts alone"
+python3 - "$OUT/findings.json" "$OUT/one-host.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+first = d["findings"][0]["endpoints"][0]["host"]
+d["findings"] = [f for f in d["findings"] if f["endpoints"][0]["host"] == first]
+json.dump(d, open(sys.argv[2], "w"))
+PY
+down_before=$(psql_db "SELECT count(*) FROM host_state WHERE state <> 'up'")
+put "$OUT/one-host.json" /tmp/one-host.json
+asi import /tmp/one-host.json > "$OUT/one-host-import.json"
+RID1=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['run_id'])" "$OUT/one-host-import.json")
+bad=$(psql_db "SELECT count(*) FROM changes WHERE run_id=$RID1 AND kind IN ('gone','host_down')")
+down_after=$(psql_db "SELECT count(*) FROM host_state WHERE state <> 'up'")
+echo "1-host import: gone/host_down=$bad, hosts not up before=$down_before after=$down_after"
+[ "$bad" = 0 ] && [ "$down_before" = "$down_after" ] || fail "partial import changed other hosts"
+
+log "RBAC: analyst (export, no scans.run) gets 403 on POST /import"
+AJAR="$OUT/analyst.jar"
+rm -f "$AJAR"
+curl -fsS -c "$AJAR" -b "$AJAR" -o /dev/null -d "login=analyst" --data-urlencode "password=${ASI_SEED_PASSWORD_ANALYST}" "$BASE/login"
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$AJAR" -H "Origin: $BASE" -F "file=@$OUT/one-host.json" "$BASE/import")
+[ "$code" = 403 ] || fail "analyst POST /import -> $code (want 403)"
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$AJAR" "$BASE/export/services.csv")
+[ "$code" = 200 ] || fail "analyst GET /export/services.csv -> $code (want 200)"
+
 log "pg_tde: every table encrypted"
 plain=$(psql_db "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE n.nspname='public' AND c.relkind IN ('r','m') AND NOT pg_tde_is_encrypted(c.oid::regclass)")
 total=$(psql_db "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','m')")
 echo "tables: $total, not encrypted: $plain"
 [ "$plain" = 0 ] && [ "$total" -gt 10 ] || fail "unencrypted tables: $plain"
+
+log "pg_statistic: no samples of text, JSON or address columns"
+psql_db "ANALYZE" >/dev/null
+stats=$(psql_db "SELECT count(*) FROM pg_statistic s JOIN pg_class c ON c.oid=s.starelid
+  JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum=s.staattnum
+  WHERE n.nspname='public' AND a.atttypid IN ('text'::regtype,'varchar'::regtype,'jsonb'::regtype,'json'::regtype,
+    'inet'::regtype,'cidr'::regtype,'bytea'::regtype,'text[]'::regtype)")
+echo "pg_statistic rows for sensitive columns: $stats"
+[ "$stats" = 0 ] || fail "pg_statistic holds samples of $stats sensitive columns"
 
 log "pg_tde: marker not visible on disk after CHECKPOINT"
 MARK="ASIE2E$(openssl rand -hex 12)"

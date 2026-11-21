@@ -59,11 +59,12 @@ func scanExportRun(row pgx.Row) (ExportRun, error) {
 	return r, err
 }
 
-// ExportLatestRun returns the most recent finished run (scan or import).
+// ExportLatestRun returns the most recent finished scan run, or the most
+// recent import when no scan has finished.
 func ExportLatestRun(ctx context.Context, db DojoDB) (ExportRun, error) {
 	return scanExportRun(db.QueryRow(ctx, `SELECT `+exportRunCols+` FROM scan_runs
 		WHERE status = 'done'
-		ORDER BY COALESCE(finished_at, started_at) DESC NULLS LAST, id DESC LIMIT 1`))
+		ORDER BY (kind = 'scan') DESC, COALESCE(finished_at, started_at) DESC NULLS LAST, id DESC LIMIT 1`))
 }
 
 // ExportRunByID returns one finished run.

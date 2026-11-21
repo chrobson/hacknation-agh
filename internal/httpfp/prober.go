@@ -298,7 +298,9 @@ func (p *HTTPProber) Probe(ctx context.Context, ep model.Endpoint) (model.HTTPOb
 		}
 		last = resp
 		obs.URL = cur
-		if resp.TLS != nil && tlsState == nil {
+		// Only the first hop is this service; a plain-http service that
+		// redirects to https must not inherit the certificate of port 443.
+		if resp.TLS != nil && tlsState == nil && len(obs.Redirects) == 0 {
 			tlsState = resp.TLS
 		}
 		for _, ck := range resp.Cookies {

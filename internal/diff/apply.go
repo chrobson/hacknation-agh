@@ -24,7 +24,8 @@ type Result struct {
 	Hosts     []model.HostState // states of the hosts in the run's scope after the run
 }
 
-// ApplyRun compares run runID with the previous finished run, persists the
+// ApplyRun compares run runID with the previous finished scan run (imports
+// are never a baseline; an import is compared only on the hosts it contains), persists the
 // changes and advances host_state, all in one transaction. Call it once the
 // run's host_obs and services are stored (typically when the run is marked
 // done). The first run ever is a baseline: host states are created but no
@@ -37,6 +38,20 @@ func ApplyRun(ctx context.Context, pool *pgxpool.Pool, runID int64, cfg Config, 
 		return err
 	})
 	return res, err
+}
+
+// DropUncarried removes "changed" rows whose new value is empty. An import
+// file (nmap XML, Generic Findings) carries only some fields; a field missing
+// from the file is unknown, not removed.
+func DropUncarried(cs []model.Change) []model.Change {
+	out := cs[:0]
+	for _, c := range cs {
+		if c.Kind == model.ChangeChanged && c.New == "" {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // ApplyRunTx is ApplyRun inside a caller-provided transaction.
@@ -74,9 +89,17 @@ func ApplyRunTx(ctx context.Context, tx pgx.Tx, runID int64, cfg Config, now tim
 		return res, fmt.Errorf("host states: %w", err)
 	}
 
+	isImport, err := store.DiffRunIsImport(ctx, tx, runID)
+	if err != nil {
+		return res, err
+	}
+
 	res.Hosts = Advance(known, obs, curr, runID, now, cfg)
 	if res.PrevRunID != 0 {
 		res.Changes = Diff(prev, curr, res.Hosts, cfg)
+		if isImport {
+			res.Changes = DropUncarried(res.Changes)
+		}
 		for i := range res.Changes {
 			res.Changes[i].RunID = runID
 			res.Changes[i].PrevRunID = res.PrevRunID

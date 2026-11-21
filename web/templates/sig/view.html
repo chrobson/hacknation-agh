@@ -6,7 +6,7 @@
     <h1>{{.Sig.Name}} <code>{{.Sig.ID}}</code></h1>
     <div class="actions">
       <a href="/signatures">Wróć do listy</a>
-      {{if not .Sig.Builtin}}
+      {{if and .CanWrite (not .Sig.Builtin)}}
         <a class="button" href="/signatures/{{.Sig.ID}}/edit">Edytuj</a>
         <form method="post" action="/signatures/{{.Sig.ID}}/delete" onsubmit="return confirm('Usunąć sygnaturę {{.Sig.ID}}?')"><button type="submit" class="danger">Usuń</button></form>
       {{end}}

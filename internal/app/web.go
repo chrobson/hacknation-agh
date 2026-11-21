@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/chrobson/hacknation-agh/internal/auth"
+	"github.com/chrobson/hacknation-agh/internal/config"
 	"github.com/chrobson/hacknation-agh/internal/httpfp"
 	"github.com/chrobson/hacknation-agh/internal/model"
 	"github.com/chrobson/hacknation-agh/internal/runner"
@@ -193,6 +194,7 @@ func (p *Pages) Mount(r chi.Router) {
 		r.Post("/scans/{id}/run", p.scanRun)
 		r.Post("/scans/{id}/delete", p.scanDelete)
 		r.Post("/runs/{id}/stop", p.runStop)
+		r.Post("/runs/{id}/resume", p.runResume)
 	})
 }
 
@@ -232,7 +234,9 @@ func flashText(code string) string {
 	case "started":
 		return "Skan uruchomiony."
 	case "stopped":
-		return "Skan zatrzymany; zostanie wznowiony w kolejnym oknie."
+		return "Skan zatrzymany. Harmonogram go nie wznowi, dopóki nie klikniesz „Wznów”."
+	case "resumed":
+		return "Skan zostanie wznowiony przy najbliższym cyklu harmonogramu (w oknie czasowym)."
 	case "deleted":
 		return "Usunięto konfigurację."
 	}
@@ -265,7 +269,8 @@ var navItems = []navItem{
 	{"/host-states", "Hosty", auth.PermResultsRead},
 	{"/annotations", "Adnotacje", auth.PermResultsRead},
 	{"/signatures", "Sygnatury", auth.PermResultsRead},
-	{"/export", "Eksport i import", auth.PermExport},
+	{"/export", "Eksport", auth.PermExport},
+	{"/import", "Import", auth.PermScansRun},
 	{"/admin/users", "Administracja", auth.PermUsersAdmin},
 }
 
@@ -293,6 +298,18 @@ func (p *Pages) nav(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pages) dashboard(w http.ResponseWriter, r *http.Request) {
+	// The dashboard shows results; a role without results.read is sent to
+	// the first page it may open instead of seeing the counts.
+	if u := auth.UserFrom(r.Context()); u != nil && !u.Can(auth.PermResultsRead) {
+		for _, it := range navItems {
+			if it.Perm != "" && it.Perm != string(auth.PermResultsRead) && u.Can(it.Perm) {
+				http.Redirect(w, r, it.Href, http.StatusSeeOther)
+				return
+			}
+		}
+		http.Error(w, "Brak uprawnienia: "+string(auth.PermResultsRead), http.StatusForbidden)
+		return
+	}
 	d, err := LoadDashboard(r.Context(), p.Deps.DB)
 	if err != nil {
 		p.fail(w, r, err)
@@ -375,14 +392,16 @@ func (p *Pages) scans(w http.ResponseWriter, r *http.Request) {
 }
 
 type scanFormData struct {
-	Config  store.ScanConfig
-	New     bool
-	Targets []model.Target
+	Config       store.ScanConfig
+	New          bool
+	Targets      []model.Target
+	MaxRate      int    // ASI_MAX_RATE
+	AllowedPorts string // ASI_SCAN_PORTS as entered, "" = no restriction
 }
 
 func (p *Pages) scanForm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	d := scanFormData{New: true, Config: store.ScanConfig{TopPorts: 1000, MaxRate: 1000, Workers: 4, Enabled: true}}
+	d := scanFormData{New: true, Config: store.ScanConfig{TopPorts: 1000, MaxRate: min(1000, p.maxRate()), Workers: 4, Enabled: true, ExtraPorts: true}}
 	if idS := chi.URLParam(r, "id"); idS != "" {
 		id, err := strconv.ParseInt(idS, 10, 64)
 		if err != nil {
@@ -406,6 +425,7 @@ func (p *Pages) scanForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Targets = ts
+	d.MaxRate, d.AllowedPorts = p.maxRate(), config.FormatPorts(p.Deps.Config.ScanPorts)
 	p.render(w, r, "scan_form", http.StatusOK, page{Data: d})
 }
 
@@ -463,11 +483,22 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 		bad(err)
 		return
 	}
-	rate, err := formInt(r, "max_rate", 1000, 0, 100000)
+	maxRate := p.maxRate()
+	rate, err := formInt(r, "max_rate", min(1000, maxRate), 1, maxRate)
 	if err != nil {
 		bad(err)
 		return
 	}
+	ports := strings.TrimSpace(r.PostFormValue("ports"))
+	if len(ports) > 2000 {
+		bad(errors.New("lista portów jest za długa"))
+		return
+	}
+	if _, err := runner.EffectivePorts(ports, p.Deps.Config.ScanPorts); err != nil {
+		bad(fmt.Errorf("porty: %v", err))
+		return
+	}
+	extraPorts := r.PostFormValue("extra_ports") != ""
 	workers, err := formInt(r, "workers", 4, 1, 64)
 	if err != nil {
 		bad(err)
@@ -519,12 +550,12 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 		return fmt.Sprintf("%02d:%02d", int(d.Hours()), int(d.Minutes())%60)
 	}
 	if id == 0 {
-		err = p.Deps.DB.QueryRow(ctx, `INSERT INTO scan_configs (name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled)
-			VALUES ($1,$2,$3,$4,$5,$6::time,$7::time,$8,$9) RETURNING id`, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled).Scan(&id)
+		err = p.Deps.DB.QueryRow(ctx, `INSERT INTO scan_configs (name, target_ids, top_ports, max_rate, workers, window_start, window_end, every_minutes, enabled, ports, extra_ports)
+			VALUES ($1,$2,$3,$4,$5,$6::time,$7::time,$8,$9,$10,$11) RETURNING id`, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts).Scan(&id)
 	} else {
 		_, err = p.Deps.DB.Exec(ctx, `UPDATE scan_configs SET name=$2, target_ids=$3, top_ports=$4, max_rate=$5, workers=$6,
-			window_start=$7::time, window_end=$8::time, every_minutes=$9, enabled=$10 WHERE id=$1`,
-			id, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled)
+			window_start=$7::time, window_end=$8::time, every_minutes=$9, enabled=$10, ports=$11, extra_ports=$12 WHERE id=$1`,
+			id, name, ids, top, rate, workers, toTime(ws), toTime(we), every, enabled, ports, extraPorts)
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "scan_configs_name_key") {
@@ -536,6 +567,14 @@ func (p *Pages) scanSave(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(r, "scan_config.save", fmt.Sprintf("scan_config:%d", id), map[string]any{"name": name, "targets": len(ids)})
 	http.Redirect(w, r, "/scans?ok=saved", http.StatusSeeOther)
+}
+
+// maxRate is the packets/s cap of a scan config (ASI_MAX_RATE).
+func (p *Pages) maxRate() int {
+	if p.Deps.Config.MaxRate > 0 {
+		return p.Deps.Config.MaxRate
+	}
+	return config.DefaultMaxRate
 }
 
 func (p *Pages) audit(r *http.Request, action, entity string, details any) {
@@ -573,12 +612,43 @@ func (p *Pages) runStop(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if p.Runner == nil || !p.Runner.Stop(id) {
+	// Mark the run stopped first so the scheduler does not resume it after
+	// the cancelled run persists itself as paused.
+	tag, err := p.Deps.DB.Exec(r.Context(), `UPDATE scan_runs SET stopped = true
+		WHERE id = $1 AND kind = 'scan' AND status IN ('queued','running','paused')`, id)
+	if err != nil {
+		p.fail(w, r, err)
+		return
+	}
+	active := p.Runner != nil && p.Runner.Stop(id)
+	if tag.RowsAffected() == 0 && !active {
 		http.Redirect(w, r, "/scans?err="+url.QueryEscape("ten przebieg nie jest wykonywany"), http.StatusSeeOther)
 		return
 	}
 	p.audit(r, "scan.stop", fmt.Sprintf("scan_run:%d", id), nil)
 	http.Redirect(w, r, "/scans?ok=stopped", http.StatusSeeOther)
+}
+
+// runResume lets the scheduler continue a run stopped by a user (at its next
+// tick, inside the config's window).
+func (p *Pages) runResume(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	tag, err := p.Deps.DB.Exec(r.Context(), `UPDATE scan_runs SET stopped = false
+		WHERE id = $1 AND stopped AND status IN ('queued','paused')`, id)
+	if err != nil {
+		p.fail(w, r, err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		http.Redirect(w, r, "/scans?err="+url.QueryEscape("tego przebiegu nie można wznowić"), http.StatusSeeOther)
+		return
+	}
+	p.audit(r, "scan.resume", fmt.Sprintf("scan_run:%d", id), nil)
+	http.Redirect(w, r, "/scans?ok=resumed", http.StatusSeeOther)
 }
 
 func (p *Pages) scanDelete(w http.ResponseWriter, r *http.Request) {

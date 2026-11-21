@@ -302,3 +302,60 @@ func TestAnnotationsCRUDAndHTTP(t *testing.T) {
 		t.Errorf("audit rows: %d", audits)
 	}
 }
+
+func TestApplyRunImportScope(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 11, 21, 10, 0, 0, 0, time.UTC)
+	full := labRun{hosts: []string{"10.20.0.10", "10.20.1.20"}, chunks: []string{"10.20.0.0/18"},
+		services: []model.ServiceObs{
+			svc(0, "10.20.0.10", 80, "nginx", "1.27.3"),
+			svc(0, "10.20.0.10", 22, "OpenSSH", "9.6"),
+			svc(0, "10.20.1.20", 80, "Apache httpd", "2.4.62"),
+		}}
+	full.services[0].CPE = "cpe:/a:igor_sysoev:nginx:1.27.3"
+	scan1 := insertRun(t, pool, full)
+	if _, err := ApplyRun(ctx, pool, scan1, testCfg, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	// The import carries one host, no CPE and no version for nginx, and an
+	// extra port: only the extra port is a change; nothing else is gone.
+	imp := insertRun(t, pool, labRun{hosts: []string{"10.20.0.10"}, services: []model.ServiceObs{
+		svc(0, "10.20.0.10", 80, "nginx", ""),
+		svc(0, "10.20.0.10", 22, "OpenSSH", "9.6"),
+		svc(0, "10.20.0.10", 8080, "Jetty", ""),
+	}})
+	if _, err := pool.Exec(ctx, `UPDATE scan_runs SET kind = 'import' WHERE id = $1`, imp); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ApplyRun(ctx, pool, imp, testCfg, t0.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := fmtChanges(res.Changes); !reflect.DeepEqual(g, []string{`new 10.20.0.10:8080/tcp ""->"Jetty"`}) {
+		t.Errorf("import changes: %q", g)
+	}
+	if res.PrevRunID != scan1 {
+		t.Errorf("import baseline %d, want %d", res.PrevRunID, scan1)
+	}
+	hs, err := store.ListHostStates(ctx, pool, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range hs {
+		if h.State != model.HostUp {
+			t.Errorf("host %s is %s after a partial import", h.IP, h.State)
+		}
+	}
+
+	// The next scan is compared with the previous scan, not the import.
+	scan2 := insertRun(t, pool, full)
+	res, err = ApplyRun(ctx, pool, scan2, testCfg, t0.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.PrevRunID != scan1 || len(res.Changes) != 0 {
+		t.Errorf("scan after import: prev %d (want %d), changes %q", res.PrevRunID, scan1, fmtChanges(res.Changes))
+	}
+}
