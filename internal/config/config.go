@@ -17,7 +17,7 @@ import (
 // (docker compose passes .env); defaults are safe for the local lab.
 type Config struct {
 	DatabaseURL    string         // ASI_DATABASE_URL
-	HTTPAddr       string         // ASI_HTTP_ADDR, default :8080
+	HTTPAddr       string         // ASI_HTTP_ADDR, default :9080 (DefaultHTTPAddr)
 	AllowedCIDRs   []netip.Prefix // ASI_ALLOWED_CIDRS, comma separated; scanning outside is refused
 	SecretKey      []byte         // ASI_SECRET_KEY, 32 bytes hex, AES-GCM key for the secrets table
 	NmapPath       string         // ASI_NMAP_PATH, default "nmap"
@@ -54,6 +54,11 @@ type UnstableConfig struct {
 // DefaultAllowedCIDRs covers the docker lab, RFC 5737 TEST-NET-1 and the
 // loopback addresses (services published by docker on the scanning host).
 const DefaultAllowedCIDRs = "10.20.0.0/18,192.0.2.0/24,127.0.0.0/8,::1/128"
+
+// DefaultHTTPAddr is the default ASI_HTTP_ADDR: port 9080, so the UI does not
+// collide with lab services that commonly use 8080 (the same port compose
+// publishes on the host, ASI_PORT).
+const DefaultHTTPAddr = ":9080"
 
 // DefaultAllPortsMaxAddrs is the default ASI_ALL_PORTS_MAX_ADDRS.
 const DefaultAllPortsMaxAddrs = 16
@@ -130,7 +135,7 @@ func FormatPorts(ps []int) string {
 func Load() (Config, error) {
 	c := Config{
 		DatabaseURL:  env("ASI_DATABASE_URL", "postgres://asi:asi@localhost:5432/asi?sslmode=disable"),
-		HTTPAddr:     env("ASI_HTTP_ADDR", ":8080"),
+		HTTPAddr:     env("ASI_HTTP_ADDR", DefaultHTTPAddr),
 		NmapPath:     env("ASI_NMAP_PATH", "nmap"),
 		DojoURL:      env("ASI_DOJO_URL", ""),
 		DojoToken:    os.Getenv("ASI_DOJO_TOKEN"),

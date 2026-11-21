@@ -103,3 +103,18 @@ func TestHTTPTimeoutAndRetries(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultHTTPAddr(t *testing.T) {
+	t.Setenv("ASI_HTTP_ADDR", "")
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.HTTPAddr != ":9080" || DefaultHTTPAddr != ":9080" {
+		t.Fatalf("HTTPAddr = %q, want :9080", c.HTTPAddr)
+	}
+	t.Setenv("ASI_HTTP_ADDR", "127.0.0.1:7000")
+	if c, err = Load(); err != nil || c.HTTPAddr != "127.0.0.1:7000" {
+		t.Fatalf("override: %q, %v", c.HTTPAddr, err)
+	}
+}

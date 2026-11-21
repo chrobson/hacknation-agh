@@ -1,6 +1,6 @@
 # Architektura: Attack Surface Intelligence
 
-Jedno binarium `asi` (`migrate | serve | scan | verify | import | export`) w Go 1.26, PostgreSQL z Percona **pg_tde** (szyfrowanie całej bazy w spoczynku), interfejs WWW renderowany po stronie serwera (`html/template` + htmx).
+Jedno binarium `asi` (`migrate | serve | scan | verify | import | export | seed-demo | validate-dojo`) w Go 1.26, PostgreSQL z Percona **pg_tde** (szyfrowanie całej bazy w spoczynku), interfejs WWW renderowany po stronie serwera (`html/template` + htmx).
 
 ## Moduły i odpowiedzialność
 

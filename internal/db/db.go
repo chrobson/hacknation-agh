@@ -26,9 +26,23 @@ func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// migrateLockID is the advisory lock key that serializes concurrent Migrate
+// calls (the app starting while `asi seed-demo` or `asi migrate` runs).
+const migrateLockID = 0x61736930 // "asi0"
+
 // Migrate applies every embedded *.sql file not yet recorded in
 // schema_migrations, in lexical order, each in its own transaction.
+// Concurrent callers wait for each other on a session advisory lock.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrateLockID); err != nil {
+		return nil, fmt.Errorf("migration lock: %w", err)
+	}
+	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, migrateLockID) }()
 	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return nil, err

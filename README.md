@@ -1,105 +1,189 @@
 # Attack Surface Intelligence
 
-System do cyklicznego, bezpiecznego skanowania rozległych sieci: wykrywanie hostów i usług, fingerprinting HTTP/TLS i technologii, własne sygnatury, porównywanie przebiegów skanu, RBAC, szyfrowanie danych w spoczynku (Percona pg_tde) i eksport do DefectDojo.
+## 1. Co to jest
 
-Jedno binarium `asi` w Go, PostgreSQL z pg_tde, interfejs WWW renderowany po stronie serwera (htmx). Architektura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i usługi (nmap), robi fingerprinting HTTP/TLS, rozpoznaje technologie, panele administracyjne i środowiska testowe własnymi sygnaturami YAML (wyłącznie GET/HEAD), porównuje kolejne przebiegi skanu i oznacza nowe, znikające, zmienione i niestabilne usługi. Wyniki trafiają do PostgreSQL zaszyfrowanego w całości (Percona pg_tde), dostęp kontroluje RBAC z czterema rolami i rolami tworzonymi przez administratora, a eksport i import używają formatu DefectDojo Generic Findings, także z wysyłką do DefectDojo przez API v2. Całość to jedno binarium `asi` w Go z interfejsem WWW renderowanym po stronie serwera (htmx), uruchamiane przez Docker Compose.
 
-## Szybki start
+## 2. Szybki start
 
-Wymagania: Docker z Compose v2 (tryb sieci hosta `make up-host` wymaga Compose 2.24 lub nowszego, bo `compose.host.yml` używa `!reset`), `make`, `openssl`. Interfejs domyślnie nasłuchuje na porcie 9080 hosta (`ASI_PORT`), żeby nie kolidować z usługami na 8080.
-
-```sh
-make env                 # .env z losowym hasłem bazy, kluczem AES i hasłami 4 użytkowników (gitignored)
-make up                  # baza z pg_tde + aplikacja na http://127.0.0.1:9080
-grep ASI_SEED_PASSWORD .env   # hasła użytkowników admin / editor / analyst / viewer
-```
-
-Skanowanie laboratorium testowego (sieć dockerowa `10.20.0.0/18`, 30 hostów, 3 warianty):
+Wymagania: Docker z Compose v2 (2.24 lub nowszy, bo `compose.host.yml` używa `!reset`), `make`, `openssl`. Tryb natywny wymaga też Go 1.26+ i nmapa na hoście.
 
 ```sh
-lab/change.sh run1       # laboratorium w wariancie run1
-make up-lab              # aplikacja dołączona do sieci laboratorium (nmap w kontenerze, -sS)
+git clone https://github.com/chrobson/hacknation-agh.git && cd hacknation-agh
+make env                        # .env z losowym hasłem bazy, kluczem AES i hasłami 4 użytkowników (gitignored)
+grep ASI_SEED_PASSWORD .env     # hasła użytkowników
 ```
 
-Następnie w przeglądarce: **Cele** → dodaj `10.20.0.0/18` i `staging.lab.local`, **Skany** → „Skanuj teraz” przy konfiguracji „Wszystkie cele” (tworzona automatycznie przy pierwszym starcie na pustej bazie; własną dodasz przyciskiem „Nowa konfiguracja”). Przebieg ma status „przetwarzanie”, dopóki trwa sondowanie HTTP, sygnatury i porównanie z poprzednim przebiegiem; wyniki i zmiany są kompletne, gdy status zmieni się na „zakończony”.
-Kolejne warianty (`lab/change.sh run2`, `run3`) pokazują nowe, znikające i zmienione usługi oraz host niestabilny.
+Interfejs: **http://127.0.0.1:9080** (port zmienia `ASI_PORT` w `.env`; 9080, żeby nie kolidować z usługami labu na 8080).
 
-Testy:
+**Użytkownicy startowi** są tworzeni przy pierwszym starcie na pustej bazie, z hasłami z `.env` (`make env` losuje je do `ASI_SEED_PASSWORD_*`; puste pole oznacza hasło losowe wypisane raz w logu aplikacji, `docker compose logs app`). Zmiana `.env` później nie zmienia haseł istniejących kont.
+
+| Login | Rola | Hasło |
+|---|---|---|
+| `admin` | Administracja | `ASI_SEED_PASSWORD_ADMIN` |
+| `editor` | Dodawanie, usuwanie, modyfikacja | `ASI_SEED_PASSWORD_EDITOR` |
+| `analyst` | Modyfikacja i odczyt | `ASI_SEED_PASSWORD_ANALYST` |
+| `viewer` | Odczyt | `ASI_SEED_PASSWORD_VIEWER` |
+
+### 2a. Lab AGH na localhost (usługi z `ports:` opublikowane na tym hoście)
+
+Najpierw uruchom stack labu, np. `docker compose -f docker-compose-custom-network.yml up -d`. Aplikacja w zwykłym kontenerze widzi tylko własny loopback, więc wybierz jeden z trzech trybów:
+
+| System | Uruchomienie | Cel skanu |
+|---|---|---|
+| **Linux** (zalecany) | `make up-host`: aplikacja w sieci hosta (`network_mode: host`) | `localhost` |
+| **Docker Desktop (Mac/Windows), OrbStack** | `make up-hostgw`: aplikacja dociera do hosta przez `host.docker.internal` | `host.docker.internal` |
+| **dowolny, nmap na hoście** | `make native`: baza w Dockerze, `bin/asi serve` i nmap na hoście (proces na pierwszym planie, Ctrl+C kończy) | `localhost` |
+
+Potem pierwszy skan:
 
 ```sh
-make test                # go vet + go test -race
-make e2e-smoke           # laboratorium run1: import, skan, asi verify (precision/recall)
-make e2e                 # run1 → run2 → run3, zmiany, host niestabilny, RBAC, DefectDojo, pg_tde
-make e2e-agh             # szablon AGH na localhost: znikająca i powracająca usługa (niżej)
+make seed-demo     # cel (localhost albo host.docker.internal, zależnie od trybu) i konfiguracja skanu "Demo"
 ```
 
-## Skanowanie usług na tym hoście (localhost)
+W przeglądarce: zaloguj się jako `admin` → **Skany** → „Skanuj teraz” przy konfiguracji **Demo**. To samo z wiersza poleceń: `docker compose exec app asi scan Demo` (w trybie natywnym `make native` zajmuje terminal, więc skan uruchom z interfejsu).
 
-Usługi opublikowane przez Dockera na hoście (`ports: "8787:80"`) są widoczne pod `127.0.0.1` hosta. Domyślna allowlista obejmuje `127.0.0.0/8` i `::1`, więc cel `localhost` (lub `127.0.0.1`) przechodzi import. Jawne `ASI_ALLOWED_CIDRS` w `.env` zastępuje domyślną listę, więc `.env` z wcześniejszej wersji musi dostać `127.0.0.0/8,::1/128` (jak w `.env.example`). Aplikacja w zwykłym kontenerze widzi jednak tylko własny loopback, dlatego są trzy tryby:
+Bez `make seed-demo`: **Cele** → wpisz `localhost` (lub `host.docker.internal`) → „Dodaj cele”, potem **Skany** → „Skanuj teraz” przy konfiguracji **Wszystkie cele**. Ta konfiguracja powstaje automatycznie na pustej bazie i obejmuje wszystkie cele (profil portów automatyczny, 1000 pakietów/s). Własną konfigurację (okno czasowe, częstotliwość, tempo, profil portów) dodaje przycisk „Nowa konfiguracja”.
 
-| Tryb | Uruchomienie | Cel do dodania | Kiedy |
-|---|---|---|---|
-| sieć hosta | `make up-host` (`compose.yml` + `compose.host.yml`, `network_mode: host`) | `localhost` | Linux; także OrbStack. Docker Desktop tylko od 4.34 z włączonym host networking |
-| `host.docker.internal` | `make up-hostgw` (`compose.yml` + `compose.hostgw.yml`) | `host.docker.internal` | Docker Desktop (Mac/Windows), OrbStack, Linux |
-| natywnie | `make native` (baza w Dockerze na `127.0.0.1:${ASI_DB_PORT:-55432}`, `bin/asi serve` i `nmap` na hoście) | `localhost` | każdy system z zainstalowanym nmapem |
+`make seed-demo` jest idempotentne. Inne cele: `SEED_TARGETS="127.0.0.1 192.168.1.10" make seed-demo` (każdy musi przejść allowlistę). Konfiguracja **Demo**: profil portów automatyczny (dla celów do 16 adresów wszystkie porty TCP, `-p-`), 1000 pakietów/s, 4 wątki, uruchamiana ręcznie.
 
-- W trybie `host.docker.internal` nazwa wskazuje bramę do hosta (Docker Desktop `192.168.65.254`, OrbStack `0.250.250.254`, Linux `172.17.0.1`). `compose.hostgw.yml` ustawia `ASI_ALLOW_HOSTS=host.docker.internal`: aplikacja przy starcie rozwiązuje tę nazwę i dopisuje każdy adres do allowlisty. Na Linuksie przez bramę widać tylko porty opublikowane na `0.0.0.0` (nie na `127.0.0.1`).
-- W trybie sieci hosta interfejs nasłuchuje na `127.0.0.1:${ASI_PORT:-9080}` hosta, a baza jest opublikowana na `127.0.0.1:${ASI_DB_PORT:-55432}`.
-- Natywnie: `asi scan`, `asi import` itd. wymagają `ASI_DATABASE_URL=postgres://asi:<ASI_DB_PASSWORD>@127.0.0.1:55432/asi?sslmode=disable` (cel `make native` ustawia go sam). Bez uprawnień roota nmap używa skanu connect (`-sT`), co dla loopbacku wystarcza.
-- `localhost` rozwiązuje się na `127.0.0.1` i `::1`; oba adresy są skanowane (IPv6 osobnym wywołaniem `nmap -6`).
-- IP hosta lub sieć LAN: dopisz je do `ASI_ALLOWED_CIDRS` w `.env`, np. `ASI_ALLOWED_CIDRS=10.20.0.0/18,127.0.0.0/8,::1/128,192.168.1.10/32` (lub `192.168.1.0/24`), albo podaj nazwę w `ASI_ALLOW_HOSTS`, po czym zrestartuj aplikację. Pojedyncze adresy, CIDR i nazwy spoza listy są odrzucane przy imporcie i przed uruchomieniem nmapa.
+Przebieg ma status „trwa”, potem „przetwarzanie” (sondowanie HTTP, sygnatury, porównanie z poprzednim przebiegiem), a wyniki i zmiany są kompletne przy statusie „zakończony”. Skan `-p-` jednego adresu przy 1000 pakietów/s trwa około 3 minut; `localhost` to dwa adresy (`127.0.0.1` i `::1`), więc około 4 minut.
 
-**Profil portów** (formularz konfiguracji skanu): `automatyczny` (domyślny) skanuje wszystkie porty TCP (`-p-`) w każdym fragmencie celów (chunku) obejmującym najwyżej `ASI_ALL_PORTS_MAX_ADDRS` adresów (domyślnie 16, czyli `localhost`, pojedynczy adres czy /28), a w większych fragmentach najpopularniejsze porty z dodatkowym przebiegiem. Decyzja zapada osobno dla każdego fragmentu, więc dopisanie sieci /24 do `localhost` nie wyłącza `-p-` dla `localhost`; `najpopularniejsze + dodatkowe` (top N, typowe porty infrastruktury i własna lista dodatkowych portów, np. `3001,8787,15432`); `własna lista`; `wszystkie` (`-p-`). Usługi Dockera często siedzą poza top 1000 (8787, 15432, 15673, 3001, 2223), dlatego dla małych celów domyślnie skanowane są wszystkie porty. `ASI_SCAN_PORTS` nadal ogranicza każdy profil.
-
-Test end-to-end na szablonie labu AGH (`docker-compose-custom-network.yml`: httpbin 8888, PostgreSQL 15432, RabbitMQ 5673/15673, Gitea 3001/2223, nginx 8787). Pliki szablonu nie są częścią repozytorium; `ASI_AGH_LAB_DIR` wskazuje katalog z nimi (domyślnie `notes/lab-agh`):
+Scenariusz z szablonu AGH (znikająca i powracająca usługa):
 
 ```sh
-ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh make e2e-agh                     # tryb domyślny: hostgw (macOS), host (Linux)
-ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh E2E_AGH_MODE=native ./scripts/e2e.sh agh-template
+docker compose -f docker-compose-custom-network.yml stop flask-app    # 8787 znika
+# Skanuj teraz → Zmiany: „Zniknięte usługi” z portem 8787
+docker compose -f docker-compose-custom-network.yml start flask-app
+# Skanuj teraz → Zmiany: „Nowe usługi” i „Niestabilne hosty i usługi” z portem 8787, host pozostaje aktywny
 ```
 
-Skrypt uruchamia stack szablonu, skanuje host (profil automatyczny, `-p-`), zatrzymuje usługę na 8787, skanuje ponownie, przywraca ją i skanuje trzeci raz. Sprawdza, że porty szablonu są wykryte w każdym przebiegu, że 8787 znika w drugim (zmiana `gone`) i wraca w trzecim (zmiany `new` i `unstable`, host pozostaje `up`), porównuje trzeci przebieg ze stanem oczekiwanym przez `asi verify`, po czym usuwa stack szablonu (`E2E_KEEP=1` zostawia aplikację).
+Uwagi do trybów:
+- **sieć hosta**: interfejs na `127.0.0.1:9080` hosta, baza na `127.0.0.1:${ASI_DB_PORT:-55432}`. Skan obejmuje też porty samej aplikacji (9080, 55432). Docker Desktop obsługuje sieć hosta tylko od 4.34 po włączeniu tej funkcji; OrbStack obsługuje ją od razu (sprawdzone).
+- **`host.docker.internal`**: nazwa wskazuje bramę do hosta (Docker Desktop `192.168.65.254`, OrbStack `0.250.250.254`, Linux `172.17.0.1`). `compose.hostgw.yml` ustawia `ASI_ALLOW_HOSTS=host.docker.internal`, więc aplikacja przy starcie dopisuje ten adres do allowlisty. Na Linuksie przez bramę widać tylko porty opublikowane na `0.0.0.0` (nie na `127.0.0.1`), a zapora (ufw, firewalld) może blokować ruch z mostka Dockera; tam wybierz `make up-host`.
+- **natywnie**: bez roota nmap używa skanu connect (`-sT`), co dla loopbacku wystarcza. Polecenia CLI wymagają `ASI_DATABASE_URL=postgres://asi:<ASI_DB_PASSWORD>@127.0.0.1:55432/asi?sslmode=disable` (`make native` i `make seed-demo` ustawiają go same).
+- **IP hosta lub sieć LAN**: dopisz je do `ASI_ALLOWED_CIDRS` w `.env`, np. `ASI_ALLOWED_CIDRS=10.20.0.0/18,127.0.0.0/8,::1/128,192.168.1.0/24`, i uruchom aplikację ponownie tym samym poleceniem `make up-…`. Jawne `ASI_ALLOWED_CIDRS` zastępuje listę domyślną, więc zostaw w nim `127.0.0.0/8,::1/128`.
+- Zmiana trybu: `docker compose down`, potem inne `make up-…`. Baza zostaje; `make seed-demo` przestawia konfigurację **Demo** na cel właściwy dla nowego trybu.
 
-**Usługa niestabilna**: usługa, która w ostatnich `ASI_UNSTABLE_WINDOW` przebiegach (domyślnie 5) zniknęła lub pojawiła się co najmniej `ASI_UNSTABLE_IF_FLIPS` razy (domyślnie 2), dostaje zmianę `unstable` przy każdym kolejnym zniknięciu lub powrocie. Scenariusz quickstart (`stop flask-app` → skan → przywrócenie → skan) daje więc `gone`, a potem `new` i `unstable` dla 8787. Gdy niestabilny jest cały host, zmiana `unstable` dotyczy hosta, a nie każdej jego usługi.
+### 2b. Własny lab testowy /18
 
-Szybkość: formularz konfiguracji proponuje 1000 pakietów/s; skan `-p-` jednego hosta trwa wtedy około 3 minut, a przy 5000 pakietów/s około 2 minut (wyższe tempo jest bezpieczne dla loopbacku, nie dla cudzej sieci).
+Repozytorium zawiera lab w Dockerze: sieć `10.20.0.0/18`, 30 hostów (WordPress, phpMyAdmin, Jenkins, Grafana, Tomcat, Gitea, Adminer, HAProxy, vhost staging, „kamera IP” i „router IoT”, SSH, FTP, MQTT, Redis, bazy danych, host niestabilny) w trzech wariantach różniących się usługami. Opis: [`lab/README.md`](lab/README.md).
 
-## Polecenia
+```sh
+lab/change.sh run1                                      # lab w wariancie run1
+make up-lab                                             # aplikacja dołączona do sieci labu (nmap -sS w kontenerze)
+SEED_TARGETS="10.20.0.0/18 staging.lab.local" make seed-demo
+docker compose exec app asi scan Demo                   # albo Skany → „Skanuj teraz”
+lab/change.sh run2                                      # zmiana labu, potem kolejny skan; analogicznie run3
+docker compose cp lab/expected/run2.json app:/tmp/run2.json
+docker compose exec app asi verify /tmp/run2.json      # precision/recall ostatniego przebiegu względem wzorca
+```
 
-| Polecenie | Opis |
-|---|---|
-| `asi serve` | migracje, użytkownicy startowi, interfejs WWW, harmonogram skanów |
-| `asi migrate` | tylko migracje |
-| `asi scan [konfiguracja]` | skan synchroniczny z postępem (domyślnie konfiguracja „Wszystkie cele”) |
-| `asi import <plik>` | cele CSV/JSON, XML nmapa albo DefectDojo Generic Findings JSON (format rozpoznawany automatycznie) |
-| `asi export dojo\|csv\|json [przebieg]` | eksport wyników na stdout |
-| `asi verify lab/expected/runN.json [-run N] [-min 0.9]` | porównanie przebiegu z wzorcem laboratorium |
-| `asi validate-dojo <plik>` | walidacja pliku Generic Findings offline |
+Skan /18 przy 1000 pakietów/s trwa około 4 minut. Własną sieć skanuje się tak samo: dopisz jej CIDR do `ASI_ALLOWED_CIDRS`, aplikację uruchom w trybie, z którego ta sieć jest osiągalna (`make up-host` na Linuksie widzi wszystko, co widzi host), dodaj cel w **Cele** i uruchom skan.
 
-## Role
+## 3. Funkcje a wymagania zadania
 
-| Rola | Uprawnienia |
-|---|---|
-| Administracja | wszystko, w tym użytkownicy, role i dziennik zdarzeń |
-| Dodawanie, usuwanie, modyfikacja | cele, skany, adnotacje, sygnatury, eksport |
-| Modyfikacja i odczyt | odczyt, adnotacje, eksport |
-| Odczyt | odczyt celów i wyników |
+| Wymaganie | Jak spełnione | Gdzie w UI |
+|---|---|---|
+| Wczytanie IP, CIDR, domen | formularz (jeden lub wiele wpisów, tagi) oraz plik CSV/JSON; ta sama walidacja, deduplikacja i allowlista; raport błędów per linia | **Cele** |
+| Bezpieczny, wielowątkowy skan nmapem, pomiar czasu, podział na podgrupy | cele dzielone na chunki /24 w kolejce w bazie (`FOR UPDATE SKIP LOCKED`), K wątków z tempem `max_rate/K`; czas przebiegu i każdego chunku zapisywany; postęp na żywo | **Skany**, **Pulpit** („Skany w toku”) |
+| Aktywne hosty, podstawowe usługi | `nmap -sn`, potem `-sS`/`-sT -sV` (top N + drugi przebieg po typowych portach infrastruktury albo `-p-` dla małych celów); dodatkowe rozpoznanie wersji dla nienazwanych portów | **Wyniki**, **Hosty** |
+| HTTP/HTTPS: tytuł, kod, nagłówki, ciasteczka, TLS, przekierowania | sonda GET/HEAD: łańcuch przekierowań, nagłówki, ciasteczka z flagami, certyfikat (wystawca, ważność, self-signed, niezgodność nazwy), favicon mmh3, czas odpowiedzi | **Wyniki** → usługa |
+| Technologie: CMS, framework, serwer, IoT | 41 wbudowanych sygnatur YAML (WordPress z wersją, Joomla, Drupal, Jenkins, Grafana, Tomcat, Gitea, RabbitMQ, Traefik, DVWA, Adminer, kamery i routery IoT…) | **Wyniki**, **Pulpit** („Detekcje według kategorii”) |
+| Staging i panele administracyjne | sygnatury `staging-env` (vhost, nagłówki, tytuł) i `admin-panel`/`login-page` (`/admin`, `/login`, bez prób logowania) | **Pulpit** („Panele administracyjne i środowiska testowe”) |
+| Porównanie przebiegów; nowe, znikające, zmienione | diff po kluczu (IP, port, protokół, vhost): `new`, `gone`, `changed` (produkt, wersja, tytuł, kod, certyfikat, czas odpowiedzi…) | **Zmiany**, **Pulpit** („Ostatnie zmiany”) |
+| Hosty i usługi niestabilne, nieaktywne | jawna, konfigurowalna definicja: `inactive` po 3 kolejnych brakach odpowiedzi, `unstable` po co najmniej 2 zmianach stanu w ostatnich 5 przebiegach (`ASI_INACTIVE_AFTER_MISSES`, `ASI_UNSTABLE_IF_FLIPS`, `ASI_UNSTABLE_WINDOW`) | **Hosty**, **Zmiany** |
+| Własne sygnatury | edytor YAML z walidacją: nagłówek, ciasteczko, hash favicony, regex HTML, ścieżka GET (≤3), wersja, `severity`, `outdated` | **Sygnatury** |
+| RBAC z tworzeniem ról, 4 role z zadania | uprawnienia sprawdzane po stronie serwera (403), role wbudowane i własne (checkboxy uprawnień), dziennik zdarzeń | **Administracja** (użytkownicy, role, dziennik) |
+| Edycja wyników zachowywana między skanami | adnotacje (komentarz, tagi, severity, fałszywy alarm) przypięte do klucza usługi, nie do przebiegu | **Adnotacje**, **Wyniki** → usługa, **Zmiany** |
+| Dashboard | ostatni przebieg, detekcje, panele i staging, ostatnie zmiany, stany hostów | **Pulpit** |
+| Szyfrowanie w spoczynku | pg_tde dla całej bazy: tabele, indeksy, TOAST, sekwencje, WAL (sekcja 5) | – |
+| Okna czasowe, częstotliwość, wznowienie | konfiguracja skanu: okno (także przez północ), co ile minut; chunk przerwany na końcu okna wraca do kolejki i jest kontynuowany w kolejnym oknie | **Skany** → konfiguracja |
+| Ograniczanie tempa | `max_rate` pakietów/s na cały przebieg (górny limit `ASI_MAX_RATE`), HTTP ≤20 żądań/s | **Skany** → konfiguracja |
+| Import i eksport JSON/CSV | eksport usług CSV/JSON i Generic Findings; import Generic Findings oraz XML nmapa jako przebieg typu `import`; cele CSV/JSON | **Eksport**, **Import**, **Cele** |
+| DefectDojo | Generic Findings z deterministycznymi tytułami i `unique_id_from_tool`; wysyłka `import-scan`/`reimport-scan` z `close_old_findings` (sekcja 6) | **Eksport** |
+| Tagi, grupowanie | tagi celów (filtr na liście celów) i adnotacji; najczęstsze usługi | **Cele**, **Adnotacje**, **Pulpit** |
 
-Administrator tworzy własne role (checkboxy uprawnień) w **Administracja → Role**.
+## 4. Bezpieczeństwo skanowania
 
-## Bezpieczeństwo skanowania
+- **Allowlista** `ASI_ALLOWED_CIDRS` (domyślnie lab `10.20.0.0/18`, TEST-NET `192.0.2.0/24`, loopback `127.0.0.0/8` i `::1/128`) sprawdzana przy imporcie celów, przy imporcie wyników i ponownie tuż przed uruchomieniem nmapa. Domeny są rozwiązywane, a każdy adres musi leżeć na liście. `ASI_ALLOW_HOSTS` dopisuje pojedyncze nazwy rozwiązywane przy starcie. `ASI_SCAN_EXCLUDE` to adresy zawsze pomijane.
+- **Porty**: profil konfiguracji skanu (automatyczny, najpopularniejsze + dodatkowe, własna lista, wszystkie). `ASI_SCAN_PORTS` ogranicza każdy skan do listy dozwolonych portów.
+- **Tempo**: `max_rate` od 1 do `ASI_MAX_RATE` (domyślnie 5000) pakietów/s na cały przebieg, dzielone równo między wątki; nie ma trybu bez limitu. Fingerprinting HTTP: najwyżej 20 żądań/s, timeout `ASI_HTTP_TIMEOUT` (10 s, wystarcza przy opóźnieniu 500 ms+ i `slow_close` z Toxiproxy), jedno ponowienie.
+- **Okna czasowe**: skan przerwany na końcu okna wraca do kolejki i jest wznawiany w następnym oknie. „Zatrzymaj” zatrzymuje przebieg na stałe, dopóki użytkownik nie kliknie „Wznów”. Strefa czasowa: `ASI_TZ` (domyślnie Europe/Warsaw).
+- **Sygnatury tylko do odczytu**: wyłącznie GET i HEAD, najwyżej 3 ścieżki na sygnaturę, bez body, bez nagłówków uwierzytelniania, bez prób logowania i bez eksploatacji. Walidator odrzuca sygnaturę, która tego nie spełnia.
+- **Aplikacja**: hasła bcrypt, sesje w bazie, ochrona CSRF (`CrossOriginProtection` + `SameSite=Lax`), po 5 nieudanych logowaniach w 15 minut odpowiedź 429, interfejs i baza publikowane tylko na `127.0.0.1`.
 
-- Allowlista sieci `ASI_ALLOWED_CIDRS` sprawdzana przy imporcie celów, przy imporcie wyników i ponownie tuż przed uruchomieniem nmapa. `ASI_SCAN_EXCLUDE` to adresy zawsze pomijane.
-- Porty: profil konfiguracji skanu (automatyczny, najpopularniejsze + dodatkowe, własna lista `22,80,8000-8100`, wszystkie `-p-`; zob. wyżej). `ASI_SCAN_PORTS` ogranicza wszystkie skany do listy dozwolonych portów.
-- Tempo: `max_rate` pakietów/s na cały skan (1 do `ASI_MAX_RATE`, domyślnie 5000), dzielone równo między wątki. Fingerprinting HTTP jest ograniczony do 20 żądań/s, tylko GET/HEAD, bez prób logowania. Timeout pojedynczego żądania HTTP to `ASI_HTTP_TIMEOUT` (domyślnie `10s`, wystarcza przy opóźnieniu 500 ms+, limitach przepustowości i `slow_close`), a `ASI_HTTP_RETRIES` (domyślnie 1, 0–3) ponawia żądanie po przekroczeniu czasu lub zerwanym połączeniu. Czas odpowiedzi każdej usługi HTTP jest zapisywany i widoczny w wynikach; zmiana o więcej niż max(300 ms, 2×) między przebiegami trafia do diffu.
-- Okna czasowe i częstotliwość w konfiguracji skanu: skan przerwany na końcu okna wraca do kolejki i jest wznawiany w następnym oknie. Czas lokalny kontenera ustawia `ASI_TZ` (domyślnie Europe/Warsaw).
-- „Zatrzymaj” zatrzymuje przebieg na stałe. Harmonogram wznowi go dopiero po kliknięciu „Wznów”.
-- Logowanie: po 5 nieudanych próbach w ciągu 15 minut (na login albo adres) kolejne próby dostają 429.
+## 5. Szyfrowanie w spoczynku (pg_tde)
 
-## DefectDojo
+Baza to Percona Distribution for PostgreSQL 18 z rozszerzeniem pg_tde. Przy pierwszej inicjalizacji [`deploy/db/init/01-tde.sql`](deploy/db/init/01-tde.sql) ustawia AES-256, klucz serwera i klucz domyślny, `default_table_access_method = tde_heap`, `pg_tde.enforce_encryption = on` i szyfrowanie WAL. Zaszyfrowane są więc wszystkie tabele, indeksy, TOAST, sekwencje i WAL, a nie tylko wybrane pola. Dodatkowo kolumny tekstowe, JSON i adresowe mają `SET STATISTICS 0` (niezaszyfrowany katalog `pg_statistic` nie dostaje próbek danych), logowanie treści zapytań jest wyłączone, a token DefectDojo w tabeli `secrets` jest dodatkowo szyfrowany AES-GCM kluczem `ASI_SECRET_KEY`.
 
-Eksport Generic Findings: strona **Eksport** lub `asi export dojo`. Import (strona **Import**, uprawnienie `scans.run`) porównuje plik z ostatnim skanem tylko na hostach z pliku. Lokalna instancja: `make dojo-up` (szczegóły w [`deploy/defectdojo/README.md`](deploy/defectdojo/README.md)); wysyłka z aplikacji wymaga `ASI_DOJO_URL`, `ASI_DOJO_PUSH=true` i `ASI_DOJO_TOKEN` (albo `ASI_DOJO_USER`/`ASI_DOJO_PASSWORD`).
+Dowód na działającej instalacji (tryby `make up-*`):
+
+```sh
+docker compose exec db psql -U asi -d asi \
+  -c "SELECT count(*) AS tabele, count(*) FILTER (WHERE pg_tde_is_encrypted(c.oid::regclass)) AS zaszyfrowane
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'" \
+  -c "SHOW pg_tde.wal_encrypt" -c "SHOW default_table_access_method"
+# tabele = zaszyfrowane (22 = 22), wal_encrypt = on, tde_heap
+
+# znacznik zapisany w bazie nie występuje w żadnym pliku na dysku (wynik 0):
+docker compose exec db psql -U asi -d asi -c "UPDATE targets SET tags = tags || '{tajny-znacznik-7f3a}'" -c CHECKPOINT -c "SELECT pg_switch_wal()"
+docker compose exec db sh -c "grep -rlF tajny-znacznik-7f3a /data/db | wc -l"
+docker compose exec db psql -U asi -d asi -c "UPDATE targets SET tags = array_remove(tags, 'tajny-znacznik-7f3a')"
+```
+
+`make e2e` wykonuje te same sprawdzenia automatycznie.
+
+## 6. DefectDojo
+
+- **Eksport**: **Eksport** → „Pobierz plik DefectDojo (Generic Findings)” albo `docker compose exec app asi export dojo`. Usługi mają severity `Info`, panele administracyjne i staging `Medium`, ryzykowne usługi według sygnatury (np. dashboard Traefika z `api.insecure`, DVWA, Redis bez hasła `High`), przestarzałe wersje (WordPress < 6.0, vsftpd < 3.0, MySQL < 8.0) `High`. Tytuły i opisy są deterministyczne, a `unique_id_from_tool` to `asi:svc:<ip>:<port>/<proto>` i `asi:sig:<ip>:<port>:<sygnatura>`, więc reimport nie tworzy duplikatów. Adnotacje są uwzględniane: fałszywe alarmy są pomijane, a ręcznie zmienione severity trafia do pliku. Walidacja offline: `asi validate-dojo <plik>`.
+- **Import**: **Import** (uprawnienie `scans.run`) przyjmuje Generic Findings JSON albo XML nmapa i tworzy przebieg typu `import`. Porównanie z ostatnim skanem dotyczy tylko hostów z pliku, a import nigdy nie staje się punktem odniesienia dla kolejnego skanu.
+- **Wysyłka do DefectDojo**: przycisk „Wyślij do DefectDojo” na stronie **Eksport** wykonuje `reimport-scan` z `close_old_findings=true` (przy pierwszej wysyłce test powstaje automatycznie). Domyślnie wyłączona; włączają ją `ASI_DOJO_URL`, `ASI_DOJO_PUSH=true` i `ASI_DOJO_TOKEN` (albo `ASI_DOJO_USER` i `ASI_DOJO_PASSWORD`) w `.env`.
+- **Lokalna instancja**: `make dojo-up` uruchamia oficjalny compose DefectDojo 3.5.202 na `http://localhost:8081` (osobny projekt, około 4 GB RAM, pierwszy start kilka minut), hasło administratora: `make dojo-password`. Z kontenera aplikacji instancja jest pod `ASI_DOJO_URL=http://host.docker.internal:8081`, w trybie sieci hosta i natywnym pod `http://localhost:8081`. Jeśli lab zajmuje port 8081 (stack „modern” z phpMyAdmin), zmień `DD_PORT` w `deploy/defectdojo/.env` przed pierwszym `make dojo-up`. Szczegóły: [`deploy/defectdojo/README.md`](deploy/defectdojo/README.md).
+
+Sprawdzone na żywo na lokalnej instancji 3.5.202 (tryb `host.docker.internal`, szablon AGH): pierwsza wysyłka utworzyła 36 aktywnych findingów; po zatrzymaniu `flask-app`, kolejnym skanie i ponownej wysyłce reimport zamknął oba findingi portu 8787 (`active=false`, `is_mitigated=true`), zostawiając 34 aktywne bez duplikatów. Publiczne demo DefectDojo jest współdzielone, więc nie było używane.
+
+## 7. Architektura
+
+Jedno binarium `asi` (`serve`, `scan`, `import`, `export`, `verify`, `seed-demo`, `migrate`, `validate-dojo`) i PostgreSQL z pg_tde w Docker Compose. `serve` udostępnia interfejs WWW (chi, `html/template`, htmx, szablony osadzone w binarium) i uruchamia harmonogram: przebieg skanu dzieli cele na chunki w kolejce w bazie, wątki uruchamiają nmapa z limitem tempa, a po skanie potok wykonuje sondowanie HTTP/TLS, dopasowanie sygnatur i diff z poprzednim przebiegiem. Moduły (`target`, `scan`/`runner`, `httpfp`, `sig`, `diff`, `auth`, `dojo`/`export`, `web`) komunikują się przez bazę i małe interfejsy. Opis modułów, kontraktu danych, przepływu skanu i decyzji: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## 8. Testy i wyniki
+
+```sh
+make test          # go vet + go test -race (testy jednostkowe)
+make e2e-smoke     # lab /18 run1: import celów, skan, asi verify
+make e2e           # lab /18 run1 → run2 → run3: zmiany, host niestabilny, RBAC, DefectDojo, pg_tde
+make e2e-agh       # szablon AGH na localhost; pliki szablonu: ASI_AGH_LAB_DIR=/ścieżka/do/lab-agh
+```
+
+Testy integracyjne z bazą: `ASI_TEST_DATABASE_URL=postgres://… go test -tags integration ./...`.
+
+**Lab /18** (`make e2e`, 64 chunki /24, 30 hostów, 1000 pakietów/s, 4 wątki, `-sS`): precision i recall 1.0 dla hostów, usług, detekcji i zmian w każdym z trzech przebiegów.
+
+| Przebieg | Czas | Hosty (TP/FP/FN) | Usługi | Detekcje | Zmiany |
+|---|---|---|---|---|---|
+| run1 | 3 min 54 s | 30/0/0 | 36/0/0 | 19/0/0 | – |
+| run2 | 3 min 58 s | 29/0/0 | 35/0/0 | 19/0/0 | 10/0/0 |
+| run3 | 3 min 54 s | 30/0/0 | 36/0/0 | 19/0/0 | 5/0/0 |
+
+Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt przy POST i dla roli Modyfikacja i odczyt przy imporcie, eksport Generic Findings (77 findingów) z walidacją offline i ponownym importem bez fałszywych zmian, szyfrowanie wszystkich 22 tabel, brak próbek w `pg_statistic` i brak jawnego znacznika na dysku.
+
+**Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty, usługi (25/0/0) i zmiany z precision i recall 1.0. Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
+
+Kroki z sekcji 2a zostały wykonane na OrbStack we wszystkich trzech trybach (`make up-hostgw`, `make up-host`, `make native`) z `make seed-demo` i skanem konfiguracji **Demo**: 2 min 52 s dla `host.docker.internal`, około 4 min dla `localhost` (dwa adresy).
+
+## 9. Ograniczenia
+
+- Skanowane są tylko porty TCP; UDP (np. DNS, SNMP) nie jest skanowany.
+- Chunki mają stały rozmiar /24. Adaptacyjny dobór rozmiaru (`target.Sizer`) jest zaimplementowany i przetestowany, ale nie jest podpięty do runnera.
+- Wszystkie testy wykonano na macOS z OrbStack (kontenery w maszynie wirtualnej z Linuksem), nie na fizycznym hoście z Linuksem. Tryb sieci hosta na Linuksie jest najprostszy, ale nie był uruchomiony na takim hoście.
+- W trybie sieci hosta i natywnym wynik skanu `localhost` zawiera też porty samej aplikacji i inne usługi hosta (np. 9080, 55432, usługi systemowe), bo to faktycznie otwarte porty.
+- Klucz pg_tde leży w lokalnym keyringu w wolumenie Dockera na tym samym hoście; produkcyjnie powinien trafić do KMS (OpenBao/Vault, KMIP). Nazwy tabel i kolumn w katalogu systemowym nie są szyfrowane.
+- Brak pasywnych źródeł danych (CT logs, DNS), oceny „ciekawości” usług i analizy różnic zależnych od pory dnia.
+- Konto użytkownika nie ma zmiany hasła w interfejsie; hasła startowe pochodzą z `.env` przy pierwszym starcie.
+- Rozpoznanie wersji zależy od nmapa `-sV` i sygnatur; usługi bez banera (np. httpbin na 8888) mają pusty produkt, a część sygnatur (strona logowania) trafia też w aplikacje, których wzorzec labu nie przewiduje.
 
 ## Licencje komponentów
 
-nmap (NPSL, instalowany z dystrybucji w obrazie budowanym lokalnie), htmx 2.0.4 (0BSD, `web/static/htmx.LICENSE`), chi, pgx, x/crypto, x/time, yaml.v3 (MIT/BSD/Apache-2.0), Percona Distribution for PostgreSQL z pg_tde (PostgreSQL License).
+nmap (NPSL, instalowany z dystrybucji w obrazie budowanym lokalnie), htmx 2.0.4 (0BSD, `web/static/htmx.LICENSE`), chi, pgx, x/crypto, x/time, yaml.v3 (MIT/BSD/Apache-2.0), Percona Distribution for PostgreSQL z pg_tde (PostgreSQL License), DefectDojo (BSD-3-Clause, osobny compose w `deploy/defectdojo`).

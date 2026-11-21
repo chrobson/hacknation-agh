@@ -8,7 +8,7 @@
 #   - secrets have no defaults: they come from deploy/defectdojo/.env, which
 #     `make dojo-env` generates with random values,
 #   - nginx publishes 127.0.0.1:${DD_PORT:-8081} so it does not clash with
-#     ASI on :8080 and is not exposed outside the host,
+#     ASI on :9080 and is not exposed outside the host,
 #   - DD_HASHCODE_FIELDS_PER_SCANNER makes Generic Findings dedupe on
 #     title + severity + endpoints (see x-dd-env).
 #

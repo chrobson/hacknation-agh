@@ -7,7 +7,7 @@ Oficjalny `docker-compose.yml` DefectDojo (licencja BSD-3-Clause) przypięty do 
 | Kontenery | nginx, uwsgi, celerybeat, celeryworker, initializer, postgres, valkey |
 | Pamięć | ok. 4 GB RAM |
 | Pierwszy start | kilka minut (migracje bazy w kontenerze `initializer`) |
-| Adres | http://localhost:8081 (tylko 127.0.0.1, żeby nie kolidować z ASI na :8080) |
+| Adres | http://localhost:8081 (tylko 127.0.0.1; ASI domyślnie na :9080) |
 
 ## Zmiany względem pliku upstream
 

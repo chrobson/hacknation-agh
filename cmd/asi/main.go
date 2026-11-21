@@ -6,6 +6,7 @@
 //	asi verify <file> [-run N]        compare a run with an expected lab file (precision/recall)
 //	asi import <file>                 import targets (CSV/JSON), nmap XML or Generic Findings JSON
 //	asi export dojo|csv|json [run]    export results to stdout
+//	asi seed-demo [target...]         add a demo target and scan configuration (default: this host)
 package main
 
 import (
@@ -44,7 +45,9 @@ const usage = `usage: asi <command>
                                 precision/recall of a run against a lab expectation
   import <file>                 targets CSV/JSON, nmap XML or Generic Findings JSON
   export dojo|csv|json [run]    export a run (default: latest) to stdout
-  validate-dojo <file>          validate a Generic Findings JSON file offline`
+  validate-dojo <file>          validate a Generic Findings JSON file offline
+  seed-demo [target...]         add targets (default: localhost, or host.docker.internal
+                                in the hostgw mode) and the scan configuration "Demo"`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -84,7 +87,7 @@ func run(args []string) error {
 	defer stop()
 
 	switch args[0] {
-	case "migrate", "serve", "scan", "verify", "import", "export":
+	case "migrate", "serve", "scan", "verify", "import", "export", "seed-demo":
 	default:
 		return fmt.Errorf("unknown command %q\n%s", args[0], usage)
 	}
@@ -110,6 +113,17 @@ func run(args []string) error {
 		return importCmd(ctx, deps, args[1:])
 	case "export":
 		return exportCmd(ctx, pool, args[1:])
+	case "seed-demo":
+		if _, err := db.Migrate(ctx, pool); err != nil {
+			return err
+		}
+		res, err := seedDemo(ctx, pool, cfg, seedTargets(cfg, args[1:]))
+		if err != nil {
+			return err
+		}
+		out, _ := json.Marshal(res)
+		fmt.Println(string(out))
+		return nil
 	}
 	return nil
 }

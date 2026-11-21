@@ -11,5 +11,5 @@ FROM alpine:3.22
 RUN apk add --no-cache nmap nmap-scripts ca-certificates tzdata
 COPY --from=build /out/asi /usr/local/bin/asi
 COPY signatures /etc/asi/signatures
-EXPOSE 8080
+EXPOSE 9080
 ENTRYPOINT ["/bin/sh", "-c", "asi migrate && exec asi serve"]
