@@ -108,6 +108,11 @@ func (Authz) Allowed(r *http.Request, perm string) bool {
 	return UserFrom(r.Context()).Can(perm)
 }
 
+// Forbidden writes the styled 403 page (or JSON for API and htmx requests).
+func (Authz) Forbidden(w http.ResponseWriter, r *http.Request, perm string) {
+	writeForbidden(w, r, perm, "Brak uprawnienia: "+perm)
+}
+
 // UserID returns the request's user id, if logged in.
 func (Authz) UserID(r *http.Request) (int64, bool) {
 	if u := UserFrom(r.Context()); u != nil {

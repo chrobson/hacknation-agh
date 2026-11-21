@@ -161,10 +161,10 @@ var funcs = template.FuncMap{
 	"fmtTime": func(v any) string {
 		switch t := v.(type) {
 		case time.Time:
-			return t.UTC().Format("2006-01-02 15:04 UTC")
+			return t.Local().Format("2006-01-02 15:04")
 		case *time.Time:
 			if t != nil {
-				return t.UTC().Format("2006-01-02 15:04 UTC")
+				return t.Local().Format("2006-01-02 15:04")
 			}
 		}
 		return ""

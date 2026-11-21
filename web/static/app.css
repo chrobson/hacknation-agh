@@ -87,6 +87,8 @@ main.narrow, .narrow { max-width: 420px; margin-left: auto; margin-right: auto; 
   padding: 1rem 1.25rem; margin: 0 0 1rem;
 }
 .card > h2:first-child, .card > h3:first-child { margin-top: 0; }
+.card.narrow { margin: 2rem auto 1rem; }
+.card td { overflow-wrap: anywhere; }
 
 /* Tables ------------------------------------------------------------------ */
 table {
@@ -97,6 +99,9 @@ table {
 th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { font-weight: 600; font-size: .9em; color: var(--muted); background: var(--bg); }
 tbody tr:hover { background: var(--info-bg); }
+td.row-actions, .nowrap { white-space: nowrap; }
+td.row-actions form { display: inline-flex; margin: 0 .25rem 0 0; }
+td.row-actions button { margin-top: 0; padding: .2rem .6rem; }
 td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
 table.data td, table.grid td { font-size: .95em; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: .5rem 0; }
@@ -122,6 +127,8 @@ button, .button {
 button:hover, .button:hover { filter: brightness(1.08); text-decoration: none; }
 button.danger, .button.danger, .danger button { background: var(--err); border-color: var(--err); color: #fff; }
 button.secondary { background: transparent; color: var(--accent); }
+.stack { display: flex; flex-direction: column; gap: .75rem; }
+.stack form.inline { flex-wrap: wrap; }
 form.inline, .inline { display: inline-flex; align-items: center; gap: .4rem; margin: 0; }
 form.inline button, .inline button { margin-top: 0; padding: .2rem .6rem; }
 form.inline select, .inline select, form.inline input, .inline input { width: auto; }
@@ -156,7 +163,7 @@ form.inline select, .inline select, form.inline input, .inline input { width: au
 .kind-host_up { background: var(--info-bg); }
 .cat-admin-panel, .cat-staging { background: var(--warn-bg); color: var(--warn); }
 .flips { display: inline-flex; gap: 2px; }
-.flip { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; }
+.flip { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; vertical-align: middle; }
 .flip.up { background: var(--ok); }
 .flip.down { background: var(--err); }
 .fp { text-decoration: line-through; color: var(--muted); }
@@ -165,7 +172,8 @@ form.inline select, .inline select, form.inline input, .inline input { width: au
 .comment { white-space: pre-wrap; }
 .annotation { font-size: .9em; }
 progress { width: 10rem; vertical-align: middle; }
-.toc { columns: 2 220px; }
+.toc { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin: .5rem 0 1rem; }
+.toc a { white-space: nowrap; }
 
 @media (max-width: 640px) {
   header.top { padding: .5rem 1rem; }

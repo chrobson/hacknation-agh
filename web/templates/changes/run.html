@@ -1,4 +1,4 @@
-{{define "title"}}Zmiany w przebiegu #{{.Run.RunID}}{{end}}
+{{define "title"}}Zmiany w przebiegu #{{.Run.RunID}} · Attack Surface Intelligence{{end}}
 {{define "content"}}
 <p><a href="/changes">&larr; Wszystkie przebiegi</a></p>
 <h1>Zmiany w przebiegu #{{.Run.RunID}}</h1>
@@ -31,9 +31,9 @@
     {{range .Rows}}
     <tr>
       <td><code>{{keyStr .Key}}</code></td>
-      {{if eq $kind "changed"}}<td>{{fieldLabel .Field}}</td><td><code>{{.Old}}</code></td><td><code>{{.New}}</code></td>
-      {{else if eq $kind "gone"}}<td>{{.Old}}</td>
-      {{else if eq $kind "new"}}<td>{{.New}}</td>
+      {{if eq $kind "changed"}}<td>{{fieldLabel .Field}}</td><td>{{with .Old}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td><td>{{with .New}}<code>{{.}}</code>{{else}}<span class="muted">—</span>{{end}}</td>
+      {{else if eq $kind "gone"}}<td>{{with .Old}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
+      {{else if eq $kind "new"}}<td>{{with .New}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
       {{else if eq $kind "unstable"}}<td class="num">{{.New}}</td>
       {{end}}
       <td>{{template "annotation_cell" (cell .Key .Ann $.CanEdit $.Return)}}</td>

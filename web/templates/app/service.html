@@ -57,10 +57,10 @@
   <dl>
     <dt>Podmiot</dt><dd>{{.Subject}}</dd>
     <dt>Wystawca</dt><dd>{{.Issuer}}</dd>
-    <dt>SAN</dt><dd>{{range .SANs}}<code>{{.}}</code> {{end}}</dd>
+    <dt>SAN</dt><dd>{{range .SANs}}<code>{{.}}</code> {{else}}<span class="muted">brak</span>{{end}}</dd>
     <dt>Ważny</dt><dd>{{fmtTime .NotBefore}} – {{fmtTime .NotAfter}}</dd>
     <dt>Wersja TLS</dt><dd>{{.Version}}</dd>
-    <dt>Problemy</dt><dd>{{if .Expired}}<span class="bad">wygasły</span> {{end}}{{if .SelfSigned}}<span class="bad">samopodpisany</span> {{end}}{{if .Mismatch}}<span class="bad">niezgodna nazwa</span>{{end}}{{if not (or .Expired .SelfSigned .Mismatch)}}brak{{end}}</dd>
+    <dt>Problemy</dt><dd>{{if or .Expired .SelfSigned .Mismatch}}<span class="bad">{{tlsProblems .Expired .SelfSigned .Mismatch}}</span>{{else}}brak{{end}}</dd>
   </dl>
   {{end}}
   {{with $.Data.Legacy}}<p>Przestarzałe protokoły: TLS 1.0 {{if .TLS10}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}, TLS 1.1 {{if .TLS11}}<span class="bad">akceptowany</span>{{else}}odrzucany{{end}}.</p>{{end}}

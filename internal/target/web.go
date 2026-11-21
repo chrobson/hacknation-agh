@@ -135,6 +135,13 @@ func (h *Handler) Routes(r chi.Router) {
 func (h *Handler) need(perm string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !h.Authz.Allowed(r, perm) {
+			// The auth module renders the 403 inside the app layout.
+			if f, ok := h.Authz.(interface {
+				Forbidden(http.ResponseWriter, *http.Request, string)
+			}); ok {
+				f.Forbidden(w, r, perm)
+				return
+			}
 			http.Error(w, "Brak uprawnień ("+perm+")", http.StatusForbidden)
 			return
 		}

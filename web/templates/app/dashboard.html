@@ -82,7 +82,7 @@
     <thead><tr><th>Zmiana</th><th>Adres</th><th>Było</th><th>Jest</th></tr></thead>
     <tbody>{{range .Changes}}
       <tr><td><span class="badge kind-{{.Kind}}">{{kindLabel .Kind}}</span></td>
-          <td>{{.IP}}{{if .Port}}:{{.Port}}/{{.Proto}}{{end}}</td><td>{{.Old}}</td><td>{{.New}}</td></tr>
+          <td class="nowrap">{{.IP}}{{if .Port}}:{{.Port}}/{{.Proto}}{{end}}</td><td>{{changeVal .Kind .Old}}</td><td>{{changeVal .Kind .New}}</td></tr>
     {{end}}</tbody>
   </table>
   <p><a href="/changes/{{.ChangeRunID}}">Wszystkie zmiany tego przebiegu</a></p>

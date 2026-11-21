@@ -594,8 +594,8 @@ var kindLabels = map[model.ChangeKind]string{
 }
 
 var kindShort = map[model.ChangeKind]string{
-	model.ChangeHostUp:   "host up",
-	model.ChangeHostDown: "host down",
+	model.ChangeHostUp:   "hosty aktywne",
+	model.ChangeHostDown: "hosty bez odpowiedzi",
 	model.ChangeUnstable: "niestabilne",
 	model.ChangeNew:      "nowe",
 	model.ChangeGone:     "zniknięte",
@@ -657,6 +657,21 @@ var funcs = template.FuncMap{
 			cd.Ann = &a
 		}
 		return cd
+	},
+	"runLabel": func(s string) string {
+		switch s {
+		case "queued":
+			return "w kolejce"
+		case "running":
+			return "trwa"
+		case "paused":
+			return "wstrzymany"
+		case "done":
+			return "zakończony"
+		case "failed":
+			return "błąd"
+		}
+		return s
 	},
 	"transitions": func(fs []model.Flip) int { return Transitions(fs) },
 	"withReturn": func(q template.URL, ret string) template.URL {

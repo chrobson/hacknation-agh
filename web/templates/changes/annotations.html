@@ -1,7 +1,8 @@
-{{define "title"}}Adnotacje{{end}}
+{{define "title"}}Adnotacje · Attack Surface Intelligence{{end}}
 {{define "content"}}
 <h1>Adnotacje</h1>
 <p class="hint">Adnotacje są przypisane do adresu, portu, protokołu i vhosta, a nie do przebiegu, więc zostają po kolejnych skanach.</p>
+<div class="stack">
 <form method="get" action="/annotations" class="inline">
   <label>Adres IP <input name="ip" value="{{.IP}}" placeholder="np. 10.20.0.10"></label>
   <button type="submit">Filtruj</button>
@@ -16,6 +17,7 @@
   <button type="submit">Nowa adnotacja</button>
 </form>
 {{end}}
+</div>
 {{if .Items}}
 <table class="grid">
   <thead><tr><th>Zasób</th><th>Adnotacja</th><th>Zmieniono</th></tr></thead>

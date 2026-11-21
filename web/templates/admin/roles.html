@@ -15,7 +15,7 @@
         {{if and (not .Builtin) (eq .Users 0)}}
         <form method="post" action="/admin/roles/{{.ID}}/delete" class="inline"
               onsubmit="return confirm('Usunąć rolę {{.Name}}?')">
-          <button type="submit">Usuń</button>
+          <button type="submit" class="danger">Usuń</button>
         </form>
         {{end}}
       </td>

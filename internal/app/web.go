@@ -77,6 +77,39 @@ var tmplFuncs = template.FuncMap{
 	"kindLabel":  kindLabel,
 	"stateLabel": stateLabel,
 	"runLabel":   runLabel,
+	// paren wraps nmap extrainfo in parentheses unless nmap already did.
+	"paren": func(s string) string {
+		if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+			return s
+		}
+		return "(" + s + ")"
+	},
+	"tlsProblems": func(expired, selfSigned, mismatch bool) string {
+		var out []string
+		if expired {
+			out = append(out, "wygasły")
+		}
+		if selfSigned {
+			out = append(out, "samopodpisany")
+		}
+		if mismatch {
+			out = append(out, "niezgodna nazwa")
+		}
+		return strings.Join(out, ", ")
+	},
+	// changeVal renders the old/new value of a change row: host states in
+	// Polish, flip counts with a unit.
+	"changeVal": func(kind, v string) string {
+		switch kind {
+		case "host_up", "host_down":
+			return stateLabel(v)
+		case "unstable":
+			if v != "" {
+				return v + " zmian stanu"
+			}
+		}
+		return v
+	},
 	"hhmm": func(d *time.Duration) string {
 		if d == nil {
 			return ""
@@ -133,7 +166,7 @@ func kindLabel(k string) string {
 	case "host_down":
 		return "host zniknął"
 	case "unstable":
-		return "host niestabilny"
+		return "niestabilność"
 	}
 	return k
 }
@@ -307,7 +340,7 @@ func (p *Pages) dashboard(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		http.Error(w, "Brak uprawnienia: "+string(auth.PermResultsRead), http.StatusForbidden)
+		auth.Authz{}.Forbidden(w, r, string(auth.PermResultsRead))
 		return
 	}
 	d, err := LoadDashboard(r.Context(), p.Deps.DB)

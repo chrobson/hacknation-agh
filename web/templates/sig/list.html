@@ -6,26 +6,26 @@
     <h1>Sygnatury detekcyjne</h1>
     {{if .CanWrite}}<a class="button" href="/signatures/new">Nowa sygnatura</a>{{end}}
   </header>
-  {{with .Message}}<p class="flash">{{.}}</p>{{end}}
+  {{with .Message}}<p class="flash ok" role="status">{{.}}</p>{{end}}
   <p class="hint">Sygnatury wysyłają wyłącznie żądania GET/HEAD, najwyżej 3 dodatkowe ścieżki, bez treści żądania i bez nagłówków uwierzytelniania.</p>
   <table class="data">
     <thead>
-      <tr><th>Identyfikator</th><th>Nazwa</th><th>Kategoria</th><th>Pewność</th><th>Dopasowania</th><th>Ścieżki</th><th>Źródło</th><th>Stan</th><th></th></tr>
+      <tr><th>Identyfikator</th><th>Nazwa</th><th>Kategoria</th><th class="num">Pewność</th><th>Dopasowania</th><th>Ścieżki</th><th>Źródło</th><th>Stan</th><th></th></tr>
     </thead>
     <tbody>
     {{range .Rows}}
       <tr{{if not .Enabled}} class="muted"{{end}}>
         <td><a href="/signatures/{{.ID}}"><code>{{.ID}}</code></a></td>
         <td>{{.Name}}</td>
-        <td>{{if .Invalid}}<span class="badge bad" title="{{.Invalid}}">błędna</span>{{else}}<span class="badge">{{.Category}}</span>{{end}}</td>
-        <td>{{if not .Invalid}}{{.Confidence}}%{{end}}</td>
+        <td>{{if .Invalid}}<span class="badge bad" title="{{.Invalid}}">błędna</span>{{else}}<span class="badge cat-{{.Category}}">{{catLabel .Category}}</span>{{end}}</td>
+        <td class="num">{{if not .Invalid}}{{.Confidence}}%{{end}}</td>
         <td>{{join .Types ", "}}</td>
         <td>{{range .Paths}}<code>{{.}}</code> {{end}}</td>
         <td>{{if .Builtin}}wbudowana{{else}}własna{{end}}</td>
         <td>{{if .Enabled}}włączona{{else}}wyłączona{{end}}</td>
-        <td class="actions">
+        <td class="row-actions">
           {{if $.CanWrite}}
-          <form method="post" action="/signatures/{{.ID}}/toggle"><button type="submit">{{if .Enabled}}Wyłącz{{else}}Włącz{{end}}</button></form>
+          <form method="post" action="/signatures/{{.ID}}/toggle"><button type="submit" class="secondary">{{if .Enabled}}Wyłącz{{else}}Włącz{{end}}</button></form>
           {{if not .Builtin}}<a href="/signatures/{{.ID}}/edit">Edytuj</a>{{end}}
           {{end}}
         </td>

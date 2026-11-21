@@ -16,7 +16,7 @@
     <dt>Źródło</dt><dd>{{if .Sig.Builtin}}wbudowana (tylko do odczytu){{else}}własna{{end}}</dd>
     <dt>Stan</dt><dd>{{if .Sig.Enabled}}włączona{{else}}wyłączona{{end}}</dd>
     {{with .Parsed}}
-    <dt>Kategoria</dt><dd>{{.Category}}</dd>
+    <dt>Kategoria</dt><dd>{{catLabel .Category}} <code>{{.Category}}</code></dd>
     <dt>Pewność</dt><dd>{{.Confidence}}%</dd>
     <dt>Warunek</dt><dd>{{if eq .Condition "and"}}wszystkie dopasowania (and){{else}}dowolne dopasowanie (or){{end}}</dd>
     {{with .Description}}<dt>Opis</dt><dd>{{.}}</dd>{{end}}

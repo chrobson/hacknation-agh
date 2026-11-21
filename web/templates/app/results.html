@@ -21,8 +21,8 @@
   <tr>
     <td><a href="/results/services/{{.ID}}">{{.IP}}:{{.Port}}/{{.Proto}}</a>{{if .VHost}}<br><small>{{.VHost}}</small>{{end}}{{if .Hostname}}<br><small>{{.Hostname}}</small>{{end}}</td>
     <td>{{.Banner}}</td>
-    <td>{{.Product}} {{.Version}}{{if .ExtraInfo}} <small>({{.ExtraInfo}})</small>{{end}}</td>
-    <td>{{with .Status}}<span class="badge">{{.}}</span>{{end}} {{.Title}}{{with .ResponseMS}} <small class="muted" title="czas odpowiedzi HTTP">{{.}} ms</small>{{end}}</td>
+    <td>{{.Product}} {{.Version}}{{with .ExtraInfo}} <small>{{paren .}}</small>{{end}}</td>
+    <td>{{with .Status}}<span class="badge">{{.}}</span>{{end}} {{.Title}}{{with .ResponseMS}} <small class="muted nowrap" title="czas odpowiedzi HTTP">{{.}} ms</small>{{end}}</td>
     <td>{{template "dets" .Detections}}</td>
     <td class="annotation{{if .FalsePos}} fp{{end}}">{{with .Severity}}<span class="badge sev sev-{{.}}">{{.}}</span> {{end}}{{.Annotation}}</td>
   </tr>{{else}}<tr><td colspan="6" class="muted">Brak usług dla tego filtra.</td></tr>{{end}}

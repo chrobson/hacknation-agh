@@ -321,7 +321,7 @@ func TestRenderIndex(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.render(rec, "index", data)
 	body := rec.Body.String()
-	for _, want := range []string{"Pobierz CSV", "/export/defectdojo.json?run=7", "Wyślij do DefectDojo", "reimport-scan", "#42", "2026-11-21 18:00 UTC", "(import)"} {
+	for _, want := range []string{"Pobierz CSV", "/export/defectdojo.json?run=7", "Wyślij do DefectDojo", "reimport-scan", "#42", now.Local().Format("2006-01-02 15:04"), "(import)"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("index page lacks %q", want)
 		}

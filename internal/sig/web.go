@@ -129,7 +129,7 @@ func loadTemplates(fsys fs.FS) (map[string]*template.Template, error) {
 		}
 		fsys = os.DirFS(dir)
 	}
-	base, err := template.New("").Funcs(template.FuncMap{"join": strings.Join}).ParseFS(fsys, "base.html")
+	base, err := template.New("").Funcs(template.FuncMap{"join": strings.Join, "catLabel": catLabel}).ParseFS(fsys, "base.html")
 	if err != nil {
 		return nil, err
 	}
@@ -441,4 +441,17 @@ func (h *handler) changed(ctx context.Context) {
 	if OnChange != nil {
 		OnChange(ctx)
 	}
+}
+
+var catLabels = map[string]string{
+	"cms": "CMS", "framework": "Framework", "server": "Serwer", "iot": "IoT",
+	"admin-panel": "Panel administracyjny", "staging": "Środowisko testowe", "other": "Inne",
+}
+
+// catLabel is the Polish label of a signature category (as on the results pages).
+func catLabel(c string) string {
+	if l, ok := catLabels[c]; ok {
+		return l
+	}
+	return c
 }

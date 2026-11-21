@@ -1,4 +1,4 @@
-{{define "title"}}Stany hostów{{end}}
+{{define "title"}}Stany hostów · Attack Surface Intelligence{{end}}
 {{define "content"}}
 <h1>Stany hostów</h1>
 <p class="hint">
@@ -19,7 +19,7 @@
     <td><span class="state state-{{.State}}">{{stateLabel .State}}</span></td>
     <td class="num">{{.Misses}}</td>
     <td class="num">{{transitions .Flips}}</td>
-    <td class="flips">{{range .Flips}}<span title="przebieg #{{.RunID}}" class="flip {{if .Up}}up{{else}}down{{end}}">{{if .Up}}&#9650;{{else}}&#9660;{{end}}</span>{{end}}</td>
+    <td><span class="flips">{{range .Flips}}<span title="przebieg #{{.RunID}}: {{if .Up}}odpowiada{{else}}brak odpowiedzi{{end}}" aria-label="przebieg #{{.RunID}}: {{if .Up}}odpowiada{{else}}brak odpowiedzi{{end}}" class="flip {{if .Up}}up{{else}}down{{end}}"></span>{{end}}</span></td>
     <td>{{fmtTime .FirstSeen}}</td>
     <td>{{fmtTime .LastSeen}}</td>
     <td><a href="/annotations?ip={{.IP}}">adnotacje</a></td>

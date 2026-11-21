@@ -22,7 +22,7 @@ Faza 1: wykrywanie hostów (<code>nmap -sn</code>), faza 2: usługi i wersje na 
     <td>{{if .HasWindow}}{{hhmm .WindowStart}}–{{hhmm .WindowEnd}}{{else}}bez okna{{end}}</td>
     <td>{{with .EveryMinutes}}{{.}} min{{else}}ręcznie{{end}}</td>
     <td>{{with .LastRun}}#{{.ID}} {{template "runstatus" .}}{{else}}–{{end}}</td>
-    <td>{{if $.Data.CanRun}}
+    <td class="row-actions">{{if $.Data.CanRun}}
       <form method="post" action="/scans/{{.ID}}/run" class="inline"><button type="submit">Skanuj teraz</button></form>
       <a href="/scans/{{.ID}}/edit">edytuj</a>
       <form method="post" action="/scans/{{.ID}}/delete" class="inline" onsubmit="return confirm('Usunąć konfigurację?')"><button type="submit" class="danger">usuń</button></form>
