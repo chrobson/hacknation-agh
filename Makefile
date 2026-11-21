@@ -1,4 +1,4 @@
-.PHONY: build test vet e2e-smoke e2e e2e-agh up up-lab up-host up-hostgw native-db native down env seed-demo doctor
+.PHONY: build test vet e2e-smoke e2e e2e-agh e2e-toxi up up-lab up-host up-hostgw native-db native down env seed-demo doctor
 
 build:
 	go build -trimpath -o bin/asi ./cmd/asi
@@ -72,5 +72,10 @@ e2e:
 # restore of the service on 8787). Template files: ASI_AGH_LAB_DIR.
 e2e-agh:
 	./scripts/e2e.sh agh-template
+
+# Fault injection: Toxiproxy latency and timeout toxics on a proxied service
+# must not produce false gone/changed rows (scripts/e2e-toxi.sh).
+e2e-toxi:
+	./scripts/e2e-toxi.sh
 
 include mk/dojo.mk

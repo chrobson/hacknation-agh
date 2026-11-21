@@ -61,18 +61,7 @@ jobs:
 
       - name: Summary
         if: always()
-        run: |
-          out=tmp/e2e-agh
-          {
-            echo '### asi verify (run3) on ubuntu-24.04, host network'
-            echo '```'
-            [ -f $out/verify_run3.json ] && python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); [print(f"{m:10s} P={r[m][\"precision\"]} R={r[m][\"recall\"]} tp={r[m][\"tp\"]} fp={r[m][\"fp\"]} fn={r[m][\"fn\"]}") for m in ("hosts","services","detections","changes")]; print("pass", r["pass"])' $out/verify_run3.json
-            echo '```'
-            echo '### changes (run2 = 8787 stopped, run3 = restored)'
-            echo '```'
-            cat $out/changes.txt 2>/dev/null || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: python3 scripts/ci-summary.py tmp/e2e-agh >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload verify JSON and scan logs
         if: always()
@@ -80,4 +69,35 @@ jobs:
         with:
           name: e2e-agh-linux
           path: tmp/e2e-agh/
+          if-no-files-found: warn
+
+  # Fault injection (scripts/e2e-toxi.sh): latency and timeout toxics on the
+  # proxied WordPress must not produce false gone/changed rows. Reported, not
+  # gating, until the gateway-error case is handled (see the step summary).
+  toxiproxy-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: true
+    env:
+      E2E_TOXI_MODE: host
+    steps:
+      - uses: actions/checkout@v4
+      - run: make env
+      - run: docker compose -f ci/agh-proxy.yml pull -q
+      - name: make e2e-toxi
+        run: make e2e-toxi
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Toxiproxy phase on ubuntu-24.04'
+            echo '```'
+            cat tmp/e2e-toxi/summary.txt tmp/e2e-toxi/changes.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-toxi-linux
+          path: tmp/e2e-toxi/
           if-no-files-found: warn
