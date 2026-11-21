@@ -8,6 +8,7 @@
   {{else}}Przebieg bazowy: brak wcześniejszego przebiegu do porównania.{{end}}
   Łącznie zmian: <strong>{{.Total}}</strong>.
 </p>
+<div hx-get="/runs/{{.Run.RunID}}/safety" hx-trigger="load" hx-swap="outerHTML"></div>
 
 {{if .Groups}}
 <nav class="toc">

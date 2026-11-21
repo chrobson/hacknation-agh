@@ -16,6 +16,7 @@ import (
 
 	"github.com/chrobson/hacknation-agh/internal/config"
 	"github.com/chrobson/hacknation-agh/internal/model"
+	"github.com/chrobson/hacknation-agh/internal/safety"
 	"github.com/chrobson/hacknation-agh/internal/scan"
 	"github.com/chrobson/hacknation-agh/internal/store"
 	"github.com/chrobson/hacknation-agh/internal/target"
@@ -70,6 +71,10 @@ type Runner struct {
 	// finished), e.g. HTTP fingerprinting then diff.ApplyRun. Its error is
 	// logged and returned by Execute.
 	OnDone func(ctx context.Context, runID int64) error
+	// SaveReceipt, if set, stores the run's safety receipt once Execute is
+	// over (after OnDone, so HTTP probes are included). It is best-effort:
+	// its error is logged and never fails the run.
+	SaveReceipt func(ctx context.Context, r safety.Receipt) error
 
 	mu     sync.Mutex
 	active map[int64]*activeRun // by run id
@@ -248,6 +253,8 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 		return fmt.Errorf("konfiguracja %q: %w", cfg.Name, err)
 	}
 	started := r.now()
+	meter := safety.NewMeter()
+	ctx = safety.WithMeter(ctx, meter)
 	if err := r.Store.StartRun(ctx, runID); err != nil {
 		return err
 	}
@@ -300,6 +307,7 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 	// Persist the outcome even if ctx is already done.
 	dbctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
+	defer r.saveReceipt(ctx, runID, meter, rate, base.MaxRate)
 	counts, err := r.Store.CountChunks(dbctx, runID)
 	if err != nil {
 		return errors.Join(werr, err)
@@ -319,6 +327,25 @@ func (r *Runner) Execute(ctx context.Context, runID int64, cfg store.ScanConfig)
 		}
 	}
 	return werr
+}
+
+// saveReceipt re-checks every scanned address against the allowlist and
+// stores the run's safety receipt. Never fails the run.
+func (r *Runner) saveReceipt(ctx context.Context, runID int64, m *safety.Meter, rate, perWorker int) {
+	if r.SaveReceipt == nil {
+		return
+	}
+	rc := m.Snapshot(r.Allow)
+	rc.RunID, rc.ConfiguredMaxRate, rc.PerWorkerRate = runID, rate, perWorker
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := r.SaveReceipt(sctx, rc); err != nil {
+		r.log().Warn("safety receipt not saved", "run", runID, "err", err)
+		return
+	}
+	r.log().Info("safety receipt", "run", runID, "nmap_packets", rc.NmapPackets, "nmap_busy_ms", rc.NmapBusyMs,
+		"effective_pps", rc.EffectivePPS(), "max_rate", rate, "http_get", rc.HTTPGet, "http_head", rc.HTTPHead,
+		"http_other", rc.HTTPOther, "targets_outside_allowlist", rc.TargetsOutsideAllowlist)
 }
 
 // RunStatus derives the run status from chunk counts after workers stopped.

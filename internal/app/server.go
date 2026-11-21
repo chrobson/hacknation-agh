@@ -19,6 +19,7 @@ import (
 	"github.com/chrobson/hacknation-agh/internal/export"
 	"github.com/chrobson/hacknation-agh/internal/httpfp"
 	"github.com/chrobson/hacknation-agh/internal/runner"
+	"github.com/chrobson/hacknation-agh/internal/safety"
 	"github.com/chrobson/hacknation-agh/internal/scan"
 	"github.com/chrobson/hacknation-agh/internal/sig"
 	"github.com/chrobson/hacknation-agh/internal/store"
@@ -30,6 +31,9 @@ import (
 // HTTPProbeRate is the global limit of HTTP requests per second sent by the
 // fingerprinting stage (all workers together).
 const HTTPProbeRate = 20
+
+// HTTPProbeBurst is the token bucket size of that limit.
+const HTTPProbeBurst = 5
 
 // Core holds the scanning machinery shared by `asi serve` and `asi scan`.
 type Core struct {
@@ -61,7 +65,7 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	c.Prober = httpfp.New(httpfp.Options{
 		Timeout:   cfg.HTTPTimeout,
 		Retries:   retries,
-		Limiter:   rate.NewLimiter(rate.Limit(HTTPProbeRate), 5),
+		Limiter:   rate.NewLimiter(rate.Limit(HTTPProbeRate), HTTPProbeBurst),
 		Allow:     c.Allow.AllowsAddr,
 		UserAgent: "asi-discovery/1.0 (+security inventory scan)",
 		// A warm second sample keeps cold starts out of the latency diff.
@@ -80,6 +84,10 @@ func NewCore(ctx context.Context, d web.Deps) (*Core, error) {
 	sc := scan.NewNmap(cfg.NmapPath, c.Allow, cfg.ScanExclude...)
 	c.Runner = runner.New(store.NewScanStore(d.DB), sc, c.Allow, cfg.ScanPrivileged, d.Log)
 	c.Runner.OnDone = c.Pipeline.OnDone
+	c.Runner.SaveReceipt = func(ctx context.Context, rc safety.Receipt) error {
+		rc.HTTPRateLimit, rc.HTTPBurst = HTTPProbeRate, HTTPProbeBurst
+		return safety.Save(ctx, d.DB, rc)
+	}
 	c.Runner.ExtraPorts = scan.DefaultExtraPorts
 	c.Runner.MaxRate = cfg.MaxRate
 	c.Runner.AllowedPorts = cfg.ScanPorts

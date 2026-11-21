@@ -5,8 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
+	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +17,7 @@ import (
 
 	"github.com/chrobson/hacknation-agh/internal/config"
 	"github.com/chrobson/hacknation-agh/internal/model"
+	"github.com/chrobson/hacknation-agh/internal/safety"
 	"github.com/chrobson/hacknation-agh/internal/target"
 )
 
@@ -317,15 +321,113 @@ func appendRate(args []string, rate int) []string {
 }
 
 func (n *Nmap) run(ctx context.Context, args []string) (Result, error) {
-	fn := n.Exec
-	if fn == nil {
-		fn = runBinary
+	start := time.Now()
+	var (
+		out  []byte
+		raw  int64
+		have bool
+		err  error
+		argv = args
+	)
+	if n.Exec != nil {
+		out, err = n.Exec(ctx, n.Path, args)
+	} else {
+		argv = MeteredArgs(args)
+		out, raw, have, err = runBinaryMetered(ctx, n.Path, argv)
 	}
-	out, err := fn(ctx, n.Path, args)
 	if err != nil {
 		return Result{}, err
 	}
-	return Parse(bytes.NewReader(out))
+	res, err := Parse(bytes.NewReader(out))
+	if err != nil {
+		return res, err
+	}
+	if m := safety.From(ctx); m != nil {
+		end := time.Now()
+		elapsed := time.Duration(res.Stats.Elapsed * float64(time.Second))
+		if elapsed <= 0 {
+			elapsed = end.Sub(start)
+		}
+		m.AddNmap(safety.Invocation{
+			Argv:    argv,
+			Packets: EstimatePackets(res.Stats, args, raw, have),
+			Raw:     have,
+			Elapsed: elapsed,
+			Start:   start,
+			End:     end,
+			Targets: TargetOperands(args),
+		})
+	}
+	return res, nil
+}
+
+// MeteredArgs is the command line actually executed: -v makes nmap print
+// its "Raw packets sent" counter on stdout, so the XML goes to file
+// descriptor 3 instead of stdout. The builders keep "-oX -" so their output
+// stays the documented command line.
+func MeteredArgs(args []string) []string {
+	out := make([]string, 0, len(args)+1)
+	out = append(out, "-v")
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-oX" && i+1 < len(args) && args[i+1] == "-" {
+			out = append(out, "-oX", "/dev/fd/3")
+			i++
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out
+}
+
+// discoveryProbes is the number of probes phase 1 sends per address
+// (-PE, -PS list, -PA list).
+func discoveryProbes() int64 {
+	return int64(1 + len(DiscoveryPorts) + len(DiscoveryACKPorts))
+}
+
+// EstimatePackets returns the packets one invocation sent: nmap's raw
+// packet counter when it printed one, plus one SYN per probed port of a
+// connect scan (connect() packets are sent by the kernel and nmap does not
+// count them). Without a counter, the probes are estimated from the XML
+// (addresses x ports, or addresses x discovery probes for -sn).
+func EstimatePackets(st Stats, args []string, raw int64, have bool) int64 {
+	hosts := int64(st.HostsTotal)
+	if st.ScanType == "connect" {
+		return raw + hosts*int64(st.NumServices)
+	}
+	if have {
+		return raw
+	}
+	if st.NumServices > 0 {
+		return hosts * int64(st.NumServices)
+	}
+	for _, a := range args {
+		if a == "-sn" {
+			return hosts * discoveryProbes()
+		}
+	}
+	return 0
+}
+
+// TargetOperands returns the target addresses and prefixes of a command
+// line built by this package (the operands after "-oX -").
+func TargetOperands(args []string) []netip.Prefix {
+	var out []netip.Prefix
+	for i := 0; i < len(args); i++ {
+		if args[i] != "-oX" || i+1 >= len(args) {
+			continue
+		}
+		for _, a := range args[i+2:] {
+			if p, err := netip.ParsePrefix(a); err == nil {
+				out = append(out, p.Masked())
+			} else if ip, err := netip.ParseAddr(a); err == nil {
+				ip = ip.Unmap()
+				out = append(out, netip.PrefixFrom(ip, ip.BitLen()))
+			}
+		}
+		break
+	}
+	return out
 }
 
 func (n *Nmap) excluded(ip netip.Addr) bool {
@@ -416,18 +518,95 @@ func runBinary(ctx context.Context, path string, args []string) ([]byte, error) 
 	cmd.Stderr = stderr
 	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
+	if err := runErr(ctx, err, stderr); err != nil {
+		return nil, err
+	}
+	return stdout.Bytes(), nil
+}
+
+func runErr(ctx context.Context, err error, stderr *capped) error {
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("nmap interrupted: %w", ctx.Err())
+		return fmt.Errorf("nmap interrupted: %w", ctx.Err())
 	}
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
-			return nil, fmt.Errorf("nmap exit %d: %s", ee.ExitCode(), strings.TrimSpace(stderr.String()))
+			return fmt.Errorf("nmap exit %d: %s", ee.ExitCode(), strings.TrimSpace(stderr.String()))
 		}
-		return nil, fmt.Errorf("nmap: %w", err)
+		return fmt.Errorf("nmap: %w", err)
 	}
-	return stdout.Bytes(), nil
+	return nil
 }
+
+// runBinaryMetered executes a MeteredArgs command line: the XML is read
+// from file descriptor 3 (in memory, never on disk) and the end of stdout
+// is searched for nmap's "Raw packets sent: N" line.
+func runBinaryMetered(ctx context.Context, path string, args []string) ([]byte, int64, bool, error) {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("nmap: pipe: %w", err)
+	}
+	defer pr.Close()
+	cmd := exec.CommandContext(ctx, path, args...)
+	stdout := &tail{max: 8192}
+	stderr := &capped{max: 4096}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	cmd.ExtraFiles = []*os.File{pw}
+	cmd.WaitDelay = 5 * time.Second
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		return nil, 0, false, fmt.Errorf("nmap: %w", err)
+	}
+	pw.Close()
+	var xmlBuf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&xmlBuf, pr)
+		close(done)
+	}()
+	werr := cmd.Wait()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		pr.Close()
+		<-done
+	}
+	if err := runErr(ctx, werr, stderr); err != nil {
+		return nil, 0, false, err
+	}
+	raw, ok := ParseRawPackets(stdout.String())
+	return xmlBuf.Bytes(), raw, ok, nil
+}
+
+var rawPacketsRe = regexp.MustCompile(`Raw packets sent: (\d+)`)
+
+// ParseRawPackets finds nmap's "Raw packets sent: N (...) | Rcvd: ..." line
+// (printed under -v when raw packets were used).
+func ParseRawPackets(stdout string) (int64, bool) {
+	m := rawPacketsRe.FindAllStringSubmatch(stdout, -1)
+	if len(m) == 0 {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(m[len(m)-1][1], 10, 64)
+	return n, err == nil
+}
+
+// tail is a writer keeping only the last max bytes.
+type tail struct {
+	buf []byte
+	max int
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if over := len(t.buf) - t.max; over > 0 {
+		t.buf = append(t.buf[:0], t.buf[over:]...)
+	}
+	return len(p), nil
+}
+
+func (t *tail) String() string { return string(t.buf) }
 
 // capped is a writer keeping only the first max bytes.
 type capped struct {

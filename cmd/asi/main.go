@@ -7,6 +7,7 @@
 //	asi import <file>                 import targets (CSV/JSON), nmap XML or Generic Findings JSON
 //	asi export dojo|csv|json [run]    export results to stdout
 //	asi seed-demo [target...]         add a demo target and scan configuration (default: this host)
+//	asi audit [run]                   safety receipt of a run as JSON (default: latest)
 package main
 
 import (
@@ -32,6 +33,7 @@ import (
 	"github.com/chrobson/hacknation-agh/internal/db"
 	"github.com/chrobson/hacknation-agh/internal/dojo"
 	"github.com/chrobson/hacknation-agh/internal/export"
+	"github.com/chrobson/hacknation-agh/internal/safety"
 	"github.com/chrobson/hacknation-agh/internal/store"
 	"github.com/chrobson/hacknation-agh/internal/target"
 	"github.com/chrobson/hacknation-agh/internal/web"
@@ -45,6 +47,8 @@ const usage = `usage: asi <command>
                                 precision/recall of a run against a lab expectation
   import <file>                 targets CSV/JSON, nmap XML or Generic Findings JSON
   export dojo|csv|json [run]    export a run (default: latest) to stdout
+  audit [run]                   safety receipt of a run as JSON (default: latest);
+                                exits non-zero when a safety check fails
   validate-dojo <file>          validate a Generic Findings JSON file offline
   seed-demo [target...]         add targets (default: localhost, or host.docker.internal
                                 in the hostgw mode) and the scan configuration "Demo"`
@@ -87,7 +91,7 @@ func run(args []string) error {
 	defer stop()
 
 	switch args[0] {
-	case "migrate", "serve", "scan", "verify", "import", "export", "seed-demo":
+	case "migrate", "serve", "scan", "verify", "import", "export", "seed-demo", "audit":
 	default:
 		return fmt.Errorf("unknown command %q\n%s", args[0], usage)
 	}
@@ -113,6 +117,8 @@ func run(args []string) error {
 		return importCmd(ctx, deps, args[1:])
 	case "export":
 		return exportCmd(ctx, pool, args[1:])
+	case "audit":
+		return auditCmd(ctx, pool, args[1:])
 	case "seed-demo":
 		if _, err := db.Migrate(ctx, pool); err != nil {
 			return err
@@ -343,4 +349,39 @@ func exportCmd(ctx context.Context, pool *pgxpool.Pool, args []string) error {
 		return export.WriteJSON(os.Stdout, s)
 	}
 	return fmt.Errorf("unknown export format %q (dojo|csv|json)", args[0])
+}
+
+// auditCmd prints the safety receipt of a run (default: the latest run
+// with a receipt) with its checks, the same JSON as GET /runs/{id}/safety.json.
+func auditCmd(ctx context.Context, pool *pgxpool.Pool, args []string) error {
+	var runID int64
+	if len(args) > 1 {
+		return errors.New("usage: asi audit [run]")
+	}
+	if len(args) == 1 {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf("run id %q: %w", args[0], err)
+		}
+		runID = id
+	} else if err := pool.QueryRow(ctx, `SELECT run_id FROM run_safety ORDER BY run_id DESC LIMIT 1`).Scan(&runID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return safety.ErrNoReceipt
+		}
+		return err
+	}
+	rc, err := safety.Load(ctx, pool, runID)
+	if err != nil {
+		return err
+	}
+	rep := safety.BuildReport(rc)
+	out, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	if !rep.OK {
+		return fmt.Errorf("run %d: safety check failed", runID)
+	}
+	return nil
 }
