@@ -8,9 +8,9 @@ System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i us
 
 ### Demo wideo (1:40)
 
-Bez dźwięku, z napisami po polsku. Trzy skany szablonu AGH `docker-compose-custom-network.yml`: przed drugim skanem zatrzymana usługa 8787, przed trzecim przywrócona. Kliknięcie w podgląd otwiera plik MP4 w pełnej rozdzielczości ([docs/demo/asi-demo.mp4](docs/demo/asi-demo.mp4?raw=true)).
+Bez dźwięku, z napisami po polsku. Trzy skany szablonu AGH `docker-compose-custom-network.yml`: przed drugim skanem zatrzymana usługa 8787, przed trzecim przywrócona. Kliknięcie w podgląd otwiera film na YouTube: <https://youtu.be/MMnmhJIPyOw>; plik MP4 jest też w repozytorium ([docs/demo/asi-demo.mp4](docs/demo/asi-demo.mp4?raw=true)).
 
-[![Demo wideo: pulpit, zmiany między przebiegami, dowód bezpieczeństwa, historia zasobu, eksport do DefectDojo, rola Odczyt](docs/demo/asi-demo.gif)](docs/demo/asi-demo.mp4?raw=true)
+[![Demo wideo: pulpit, zmiany między przebiegami, dowód bezpieczeństwa, historia zasobu, eksport do DefectDojo, rola Odczyt](docs/demo/asi-demo.gif)](https://youtu.be/MMnmhJIPyOw)
 
 ### Zrzuty ekranu
 
