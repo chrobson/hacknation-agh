@@ -133,7 +133,7 @@ docker compose exec db psql -U asi -d asi \
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind = 'r'" \
   -c "SHOW pg_tde.wal_encrypt" -c "SHOW default_table_access_method"
-# tabele = zaszyfrowane (22 = 22), wal_encrypt = on, tde_heap
+# tabele = zaszyfrowane (23 = 23), wal_encrypt = on, tde_heap
 
 # znacznik zapisany w bazie nie występuje w żadnym pliku na dysku (wynik 0):
 docker compose exec db psql -U asi -d asi -c "UPDATE targets SET tags = tags || '{tajny-znacznik-7f3a}'" -c CHECKPOINT -c "SELECT pg_switch_wal()"
@@ -181,7 +181,7 @@ Testy integracyjne z bazą: `ASI_TEST_DATABASE_URL=postgres://… go test -tags 
 | run2 | 3 min 58 s | 29/0/0 | 35/0/0 | 19/0/0 | 10/0/0 |
 | run3 | 3 min 54 s | 30/0/0 | 36/0/0 | 19/0/0 | 5/0/0 |
 
-Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt przy POST i dla roli Modyfikacja i odczyt przy imporcie, eksport Generic Findings (77 findingów) z walidacją offline i ponownym importem bez fałszywych zmian, szyfrowanie wszystkich 22 tabel, brak próbek w `pg_statistic` i brak jawnego znacznika na dysku.
+Ten sam przebieg sprawdza też: host niestabilny po run3, 403 dla roli Odczyt przy POST i dla roli Modyfikacja i odczyt przy imporcie, eksport Generic Findings (77 findingów) z walidacją offline i ponownym importem bez fałszywych zmian, szyfrowanie wszystkich 23 tabel, brak próbek w `pg_statistic` i brak jawnego znacznika na dysku.
 
 **Szablon AGH** (`make e2e-agh`, stack custom-network, profil automatyczny `-p-`): trzy skany hosta, w drugim zatrzymana usługa na 8787. Wynik: porty szablonu (2223, 3001, 5673, 8787, 8888, 15432, 15673) wykryte w każdym przebiegu, w drugim zmiana `gone` dla 8787, w trzecim `new` i `unstable` (flips=2), host pozostaje `up`; `asi verify` trzeciego przebiegu: hosty (1/0/0), detekcje (5/0/0) i zmiany szablonu z precision i recall 1.0. Usługi: 25/1/0 (precision 0,96), a zmiany 2/1/0, bo w trzecim przebiegu na hoście był otwarty dodatkowy port efemeryczny (54114) aplikacji spoza szablonu. Przed poprawką detekcje miały precision 0,71 (5/2/0): strona logowania na Gitei (3001) i na interfejsie samego skanera (18081). Skan jednego adresu `-p-` trwa około 2 min przy 5000 pakietów/s i około 3 min przy 1000 pakietów/s.
 
