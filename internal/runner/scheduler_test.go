@@ -45,8 +45,12 @@ func TestTickStartsPausesResumes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	loc := time.Local
-	outside := time.Date(2026, 11, 21, 12, 0, 0, 0, loc)
-	inside := time.Date(2026, 11, 21, 23, 0, 0, 0, loc)
+	// The window end becomes a real context deadline for the run, so the
+	// simulated day has to lie in the future: a fixed calendar date makes the
+	// run expire at once and the test hang as soon as that date has passed.
+	day := time.Now().AddDate(0, 0, 1)
+	outside := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, loc)
+	inside := time.Date(day.Year(), day.Month(), day.Day(), 23, 0, 0, 0, loc)
 
 	// Outside the window nothing starts.
 	if err := r.Tick(ctx, outside); err != nil {

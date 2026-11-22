@@ -6,6 +6,20 @@
 
 System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i usługi (nmap), robi fingerprinting HTTP/TLS, rozpoznaje technologie, panele administracyjne i środowiska testowe własnymi sygnaturami YAML (wyłącznie GET/HEAD), porównuje kolejne przebiegi skanu i oznacza nowe, znikające, zmienione i niestabilne usługi. Wyniki trafiają do PostgreSQL zaszyfrowanego w całości (Percona pg_tde), dostęp kontroluje RBAC z czterema rolami i rolami tworzonymi przez administratora, a eksport i import używają formatu DefectDojo Generic Findings, także z wysyłką do DefectDojo przez API v2. Całość to jedno binarium `asi` w Go z interfejsem WWW renderowanym po stronie serwera (htmx), uruchamiane przez Docker Compose.
 
+Trzy widoki interfejsu po trzech skanach własnego labu /18 (sekcja 2b; przebieg #3: 30 hostów, 36 usług).
+
+Pulpit, karta „Priorytet analityczny”: usługi w kolejności przeglądu, z oceną 0–100 i powodem w jednym zdaniu.
+
+![Pulpit: karta „Priorytet analityczny” z oceną i uzasadnieniem dla każdej usługi](docs/img/priorytet.jpg)
+
+Zmiany w czasie: słupek na każdy przebieg z podziałem na rodzaje zmian (przebieg #1 jest bazowy, więc pusty).
+
+![Wykres „Zmiany w czasie” dla przebiegów #1–#3](docs/img/zmiany.jpg)
+
+Dowód bezpieczeństwa przebiegu (w sekcji 4 opisany jako paragon bezpieczeństwa): warunki zmierzone przez skaner w trakcie skanu.
+
+![Dowód bezpieczeństwa przebiegu #3: pięć warunków z wynikiem i pomiarem](docs/img/dowod-bezpieczenstwa.jpg)
+
 ## 2. Szybki start
 
 Wymagania: Docker z pluginem Compose v2 (polecenie `docker compose`), `make`, `openssl`. Pliki Compose nie używają znaczników `!reset`/`!override`, więc nie wymagają Compose 2.24+ (sprawdzone na żywo: Docker Compose 5.5.0 z OrbStack na macOS i Docker Compose 2.40.3 z Ubuntu 22.04). Tryb natywny wymaga też Go 1.26+ i nmapa na hoście. `make doctor` sprawdza środowisko (Docker i dostęp do demona, Compose v2, `openssl`, wolne porty `ASI_PORT`/`ASI_DB_PORT`) i wskazuje, co poprawić; każde `make up…` uruchamia je samo.
