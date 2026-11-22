@@ -6,7 +6,15 @@
 
 System do cyklicznego, bezpiecznego skanowania sieci: wykrywa aktywne hosty i usługi (nmap), robi fingerprinting HTTP/TLS, rozpoznaje technologie, panele administracyjne i środowiska testowe własnymi sygnaturami YAML (wyłącznie GET/HEAD), porównuje kolejne przebiegi skanu i oznacza nowe, znikające, zmienione i niestabilne usługi. Wyniki trafiają do PostgreSQL zaszyfrowanego w całości (Percona pg_tde), dostęp kontroluje RBAC z czterema rolami i rolami tworzonymi przez administratora, a eksport i import używają formatu DefectDojo Generic Findings, także z wysyłką do DefectDojo przez API v2. Całość to jedno binarium `asi` w Go z interfejsem WWW renderowanym po stronie serwera (htmx), uruchamiane przez Docker Compose.
 
-Trzy widoki interfejsu po trzech skanach własnego labu /18 (sekcja 2b; przebieg #3: 30 hostów, 36 usług).
+### Demo wideo (1:40)
+
+Bez dźwięku, z napisami po polsku. Trzy skany szablonu AGH `docker-compose-custom-network.yml`: przed drugim skanem zatrzymana usługa 8787, przed trzecim przywrócona. Kliknięcie w podgląd otwiera plik MP4 w pełnej rozdzielczości ([docs/demo/asi-demo.mp4](docs/demo/asi-demo.mp4?raw=true)).
+
+[![Demo wideo: pulpit, zmiany między przebiegami, dowód bezpieczeństwa, historia zasobu, eksport do DefectDojo, rola Odczyt](docs/demo/asi-demo.gif)](docs/demo/asi-demo.mp4?raw=true)
+
+### Zrzuty ekranu
+
+Widoki interfejsu po trzech skanach własnego labu /18 (sekcja 2b; przebieg #3: 30 hostów, 36 usług).
 
 Pulpit, karta „Priorytet analityczny”: usługi w kolejności przeglądu, z oceną 0–100 i powodem w jednym zdaniu.
 
@@ -19,6 +27,22 @@ Zmiany w czasie: słupek na każdy przebieg z podziałem na rodzaje zmian (przeb
 Dowód bezpieczeństwa przebiegu (w sekcji 4 opisany jako paragon bezpieczeństwa): warunki zmierzone przez skaner w trakcie skanu.
 
 ![Dowód bezpieczeństwa przebiegu #3: pięć warunków z wynikiem i pomiarem](docs/img/dowod-bezpieczenstwa.jpg)
+
+Wyniki przebiegu #3 posortowane po priorytecie: adres, usługa, produkt i wersja, odpowiedź HTTP, detekcje.
+
+![Wyniki skanu #3: 30 hostów, 36 usług, sortowanie po priorytecie](docs/img/wyniki.jpg)
+
+Szczegóły usługi: ocena jako jawna suma reguł, a przy każdej detekcji CWE, technika ATT&CK, dowody i zalecenie.
+
+![Usługa 10.20.11.130:6379: Redis bez uwierzytelnienia, ocena 58/100 z rozbiciem na reguły](docs/img/usluga.jpg)
+
+Historia zasobu: stan w kolejnych przebiegach i dostępność według pory dnia.
+
+![Historia hosta 10.20.60.120: widoczny, brak, widoczny; dostępność 2/3](docs/img/historia.jpg)
+
+Administracja → Role: cztery role wbudowane i uprawnienia, z których składa się własne.
+
+![Role i uprawnienia: cztery role wbudowane](docs/img/role.jpg)
 
 ## 2. Szybki start
 
